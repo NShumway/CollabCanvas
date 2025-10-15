@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState } from 'react';
 import { Stage, Layer, Rect, Circle } from 'react-konva';
 import useCanvasStore from '../../store/canvasStore';
+import Shape from './Shape';
 
 const CANVAS_SIZE = 5000; // 5K x 5K canvas
 const MIN_ZOOM = 0.1;
@@ -10,9 +11,18 @@ const Canvas = () => {
   const stageRef = useRef(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   
-  const { viewport, updateViewport } = useCanvasStore();
+  const { 
+    viewport, 
+    updateViewport, 
+    shapes,
+    createMode,
+    setCreateMode,
+    clearCreateMode,
+    addShape,
+    clearSelection
+  } = useCanvasStore();
   
-  // Update canvas dimensions (leave space for toolbar - 64px header + 60px toolbar)
+  // Update canvas dimensions (leave space for toolbar - 64px header + 64px toolbar)
   useEffect(() => {
     const updateSize = () => {
       setDimensions({
@@ -24,6 +34,29 @@ const Canvas = () => {
     updateSize();
     // Note: Window resize handling will be added after MVP
   }, []);
+  
+  // Handle keyboard shortcuts (Figma-style)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        clearCreateMode();
+        clearSelection();
+      }
+      if (e.key === 'r' || e.key === 'R') {
+        if (!createMode || createMode !== 'rectangle') {
+          e.preventDefault();
+          setCreateMode('rectangle');
+        }
+      }
+      if (e.key === 'v' || e.key === 'V') {
+        e.preventDefault();
+        clearCreateMode();
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [createMode, clearCreateMode, clearSelection, setCreateMode]);
   
   // Handle pan functionality
   const handleDragEnd = (e) => {
@@ -73,6 +106,46 @@ const Canvas = () => {
     });
   };
   
+  // Handle stage click for creating shapes or deselecting
+  const handleStageClick = (e) => {
+    // Check if we clicked on the stage background (not a shape)
+    if (e.target === e.target.getStage()) {
+      if (createMode === 'rectangle') {
+        // Create new rectangle at click position
+        const stage = stageRef.current;
+        const pointer = stage.getPointerPosition();
+        
+        // Convert screen coordinates to world coordinates
+        const worldPos = {
+          x: (pointer.x - viewport.x) / viewport.zoom,
+          y: (pointer.y - viewport.y) / viewport.zoom,
+        };
+        
+        // Create new rectangle (Figma default size ~100x100)
+        const newShape = {
+          id: crypto.randomUUID(),
+          type: 'rectangle',
+          x: worldPos.x,
+          y: worldPos.y,
+          width: 100,
+          height: 100,
+          fill: '#E2E8F0', // Light gray default
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          createdBy: 'current-user', // Will be replaced with actual user in multiplayer
+        };
+        
+        addShape(newShape);
+        
+        // Keep create mode active (Figma behavior)
+        // User can press ESC or click selection tool to exit
+      } else {
+        // Clear selection when clicking background
+        clearSelection();
+      }
+    }
+  };
+  
   // Generate dot grid pattern for background (Figma-style)
   const generateGridDots = () => {
     const dots = [];
@@ -97,6 +170,7 @@ const Canvas = () => {
             radius={dotSize}
             fill="#4A5568"
             opacity={0.4}
+            listening={false} // Don't capture clicks on grid dots
           />
         );
       }
@@ -120,17 +194,22 @@ const Canvas = () => {
         y={viewport.y}
         scaleX={viewport.zoom}
         scaleY={viewport.zoom}
-        draggable={true}
+        draggable={createMode === null} // Only allow panning when not in create mode
         onDragEnd={handleDragEnd}
         onWheel={handleWheel}
-        style={{ cursor: 'grab' }}
+        onClick={handleStageClick}
+        style={{ 
+          cursor: createMode === 'rectangle' ? 'crosshair' : 'grab'
+        }}
         onMouseDown={(e) => {
-          if (e.target === e.target.getStage()) {
+          if (e.target === e.target.getStage() && createMode === null) {
             e.target.getStage().container().style.cursor = 'grabbing';
           }
         }}
         onMouseUp={(e) => {
-          e.target.getStage().container().style.cursor = 'grab';
+          if (createMode === null) {
+            e.target.getStage().container().style.cursor = 'grab';
+          }
         }}
       >
         {/* Background Layer */}
@@ -144,15 +223,18 @@ const Canvas = () => {
             fill="#2D3748"
             stroke="#4A5568"
             strokeWidth={2}
+            listening={false} // Don't capture clicks - let them go to Stage
           />
           
           {/* Grid dots */}
           {generateGridDots()}
         </Layer>
         
-        {/* Shapes Layer - will be added in PR #4 */}
+        {/* Shapes Layer */}
         <Layer>
-          {/* Shapes will be rendered here */}
+          {Object.values(shapes).map((shape) => (
+            <Shape key={shape.id} shape={shape} />
+          ))}
         </Layer>
         
         {/* Cursors Layer - will be added in PR #6 */}

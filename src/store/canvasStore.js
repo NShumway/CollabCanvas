@@ -21,6 +21,9 @@ const useCanvasStore = create((set, get) => ({
   // Loading states
   isLoading: false,
   
+  // Create mode state
+  createMode: null, // null | 'rectangle' | 'circle' | 'text' etc.
+  
   // Shape actions
   setShapes: (shapes) => set({ shapes }),
   
@@ -94,6 +97,11 @@ const useCanvasStore = create((set, get) => ({
   
   // Loading actions
   setLoading: (isLoading) => set({ isLoading }),
+  
+  // Create mode actions
+  setCreateMode: (mode) => set({ createMode: mode }),
+  
+  clearCreateMode: () => set({ createMode: null }),
 }));
 
 export default useCanvasStore;
