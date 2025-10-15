@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState } from 'react';
 import { Stage, Layer, Rect, Circle } from 'react-konva';
 import useCanvasStore from '../../store/canvasStore';
+import { useSyncShapes } from '../../hooks/useSyncShapes';
 import Shape from './Shape';
 
 const CANVAS_SIZE = 5000; // 5K x 5K canvas
@@ -18,9 +19,12 @@ const Canvas = () => {
     createMode,
     setCreateMode,
     clearCreateMode,
-    addShape,
-    clearSelection
+    clearSelection,
+    isLoading
   } = useCanvasStore();
+  
+  // Real-time shape synchronization
+  const { createShape } = useSyncShapes();
   
   // Update canvas dimensions (leave space for toolbar - 64px header + 64px toolbar)
   useEffect(() => {
@@ -130,12 +134,10 @@ const Canvas = () => {
           width: 100,
           height: 100,
           fill: '#E2E8F0', // Light gray default
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          createdBy: 'current-user', // Will be replaced with actual user in multiplayer
         };
         
-        addShape(newShape);
+        // Sync to Firestore immediately (shape creation is not debounced)
+        createShape(newShape);
         
         // Keep create mode active (Figma behavior)
         // User can press ESC or click selection tool to exit
@@ -184,6 +186,8 @@ const Canvas = () => {
       <div className="absolute top-4 left-4 z-10 bg-black bg-opacity-50 text-white px-3 py-2 rounded text-sm">
         <div>Zoom: {(viewport.zoom * 100).toFixed(0)}%</div>
         <div>Position: ({Math.round(viewport.x)}, {Math.round(viewport.y)})</div>
+        <div>Shapes: {Object.keys(shapes).length}</div>
+        {isLoading && <div className="text-yellow-400">🔄 Syncing...</div>}
       </div>
       
       <Stage

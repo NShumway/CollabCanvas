@@ -1,8 +1,10 @@
 import { Rect } from 'react-konva';
 import useCanvasStore from '../../store/canvasStore';
+import { useSyncShapes } from '../../hooks/useSyncShapes';
 
 const Shape = ({ shape }) => {
   const { selectedIds, setSelectedIds, updateShape } = useCanvasStore();
+  const { syncShape } = useSyncShapes();
   
   const isSelected = selectedIds.includes(shape.id);
   
@@ -38,8 +40,12 @@ const Shape = ({ shape }) => {
       y: e.target.y(),
     };
     
-    // Update position immediately for smooth dragging
+    // Update local state immediately for smooth dragging
     updateShape(shape.id, newPos);
+    
+    // Sync to Firestore (debounced for performance)
+    const updatedShape = { ...shape, ...newPos };
+    syncShape(updatedShape);
   };
   
   const handleDragEnd = (e) => {
@@ -51,11 +57,12 @@ const Shape = ({ shape }) => {
       y: e.target.y(),
     };
     
-    // Final position update with timestamp
-    updateShape(shape.id, {
-      ...newPos,
-      updatedAt: Date.now(),
-    });
+    // Final local update
+    updateShape(shape.id, newPos);
+    
+    // Final sync to Firestore (this will flush any pending debounced writes)
+    const updatedShape = { ...shape, ...newPos };
+    syncShape(updatedShape);
   };
   
   // Default shape styles (Figma-like)
