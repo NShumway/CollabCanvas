@@ -1,10 +1,9 @@
 import { Rect } from 'react-konva';
 import useCanvasStore from '../../store/canvasStore';
-import { useSyncShapes } from '../../hooks/useSyncShapes';
+import { getSyncEngine } from '../../services/syncEngine';
 
 const Shape = ({ shape }) => {
-  const { selectedIds, setSelectedIds, updateShape, currentUser } = useCanvasStore();
-  const { syncShape } = useSyncShapes();
+  const { selectedIds, setSelectedIds, currentUser } = useCanvasStore();
   
   const isSelected = selectedIds.includes(shape.id);
   
@@ -40,17 +39,19 @@ const Shape = ({ shape }) => {
       y: e.target.y(),
     };
     
-    // Update local state immediately for smooth dragging with metadata
-    const updateData = {
-      ...newPos,
-      clientTimestamp: Date.now(), // update local timestamp for sync comparison
-      updatedBy: currentUser?.uid || 'unknown',
-    };
-    updateShape(shape.id, updateData);
-    
-    // Sync to Firestore (debounced for performance)
-    const updatedShape = { ...shape, ...updateData };
-    syncShape(updatedShape);
+    try {
+      const syncEngine = getSyncEngine();
+      
+      // WRITE PATH: Use SyncEngine for bulletproof sync
+      // 1. Apply local change immediately (60fps UX)
+      syncEngine.applyLocalChange(shape.id, newPos);
+      
+      // 2. Queue write to Firestore (debounced for drag operations)
+      const updatedShape = { ...shape, ...newPos };
+      syncEngine.queueWrite(shape.id, updatedShape, false); // false = debounced
+    } catch (error) {
+      console.warn('SyncEngine not available during drag, skipping sync:', error);
+    }
   };
   
   const handleDragEnd = (e) => {
@@ -62,17 +63,19 @@ const Shape = ({ shape }) => {
       y: e.target.y(),
     };
     
-    // Final local update with metadata
-    const finalUpdateData = {
-      ...newPos,
-      clientTimestamp: Date.now(), // final timestamp for sync
-      updatedBy: currentUser?.uid || 'unknown',
-    };
-    updateShape(shape.id, finalUpdateData);
-    
-    // Final sync to Firestore (this will flush any pending debounced writes)
-    const updatedShape = { ...shape, ...finalUpdateData };
-    syncShape(updatedShape);
+    try {
+      const syncEngine = getSyncEngine();
+      
+      // WRITE PATH: Use SyncEngine for bulletproof sync
+      // 1. Apply final local change
+      syncEngine.applyLocalChange(shape.id, newPos);
+      
+      // 2. Flush any pending writes immediately (end of drag operation)
+      const updatedShape = { ...shape, ...newPos };
+      syncEngine.queueWrite(shape.id, updatedShape, true); // true = immediate flush
+    } catch (error) {
+      console.warn('SyncEngine not available during drag end, skipping sync:', error);
+    }
   };
   
   // Default shape styles (Figma-like)

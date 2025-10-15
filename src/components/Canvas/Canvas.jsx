@@ -1,7 +1,8 @@
 import { useRef, useEffect, useState } from 'react';
 import { Stage, Layer, Rect, Circle } from 'react-konva';
 import useCanvasStore from '../../store/canvasStore';
-import { useSyncShapes } from '../../hooks/useSyncShapes';
+import { useFirestoreSync } from '../../hooks/useFirestoreSync';
+import { createSyncEngine } from '../../services/syncEngine';
 import Shape from './Shape';
 
 const CANVAS_SIZE = 5000; // 5K x 5K canvas
@@ -10,6 +11,7 @@ const MAX_ZOOM = 3;
 
 const Canvas = () => {
   const stageRef = useRef(null);
+  const syncEngineRef = useRef(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   
   const { 
@@ -21,12 +23,33 @@ const Canvas = () => {
     clearCreateMode,
     clearSelection,
     isLoading,
-    currentUser,
-    addShape
+    currentUser
   } = useCanvasStore();
   
-  // Real-time shape synchronization
-  const { createShape } = useSyncShapes();
+  // READ PATH: Real-time shape synchronization from Firestore
+  useFirestoreSync();
+  
+  // WRITE PATH: Initialize SyncEngine for writing to Firestore
+  useEffect(() => {
+    if (currentUser && !syncEngineRef.current) {
+      syncEngineRef.current = createSyncEngine();
+      syncEngineRef.current.initialize(useCanvasStore, currentUser);
+      console.log('🔧 SyncEngine initialized for user:', currentUser.displayName);
+    }
+    
+    if (syncEngineRef.current && currentUser) {
+      syncEngineRef.current.initialize(useCanvasStore, currentUser);
+    }
+  }, [currentUser]);
+  
+  // Cleanup SyncEngine on unmount
+  useEffect(() => {
+    return () => {
+      if (syncEngineRef.current) {
+        syncEngineRef.current.cleanup();
+      }
+    };
+  }, []);
   
   // Update canvas dimensions (leave space for toolbar - 64px header + 64px toolbar)
   useEffect(() => {
@@ -128,7 +151,6 @@ const Canvas = () => {
         };
         
         // Create new rectangle (Figma default size ~100x100)
-        // Include full metadata structure for sync architecture
         const newShape = {
           id: crypto.randomUUID(),
           type: 'rectangle',
@@ -137,18 +159,21 @@ const Canvas = () => {
           width: 100,
           height: 100,
           fill: '#E2E8F0', // Light gray default
-          // Metadata for sync architecture (PR #4 requirements)
+          // Metadata for sync architecture
           createdBy: currentUser?.uid || 'unknown',
-          clientTimestamp: Date.now(), // for local comparison during sync
-          updatedAt: null, // will be set by server timestamp on sync
           updatedBy: currentUser?.uid || 'unknown',
         };
         
-        // Add to local state immediately for instant feedback (PR #4 requirement)
-        addShape(newShape);
-        
-        // Sync to Firestore in background (non-blocking)
-        createShape(newShape);
+        if (syncEngineRef.current) {
+          // WRITE PATH: Use SyncEngine for bulletproof sync
+          // 1. Apply local change immediately (60fps UX)
+          syncEngineRef.current.applyLocalChange(newShape.id, newShape);
+          
+          // 2. Queue write to Firestore (immediate for creation)
+          syncEngineRef.current.queueWrite(newShape.id, newShape, true);
+        } else {
+          console.warn('SyncEngine not ready, shape creation will not sync');
+        }
         
         // Keep create mode active (Figma behavior)
         // User can press ESC or click selection tool to exit
