@@ -3,8 +3,8 @@ import { useAuth } from './useAuth';
 import useCanvasStore from '../store/canvasStore';
 import { writeShape, deleteShape as deleteShapeFromFirestore, listenToShapes } from '../services/firestore';
 
-// Aggressive debouncing to stay within Firebase limits
-const DEBOUNCE_DELAY = 250; // 250ms debounce for drag operations
+// Debouncing to stay within Firebase limits while keeping responsive UX
+const DEBOUNCE_DELAY = 100; // 100ms debounce for drag operations (PR #4 testing)
 
 export const useSyncShapes = () => {
   const { currentUser } = useAuth();

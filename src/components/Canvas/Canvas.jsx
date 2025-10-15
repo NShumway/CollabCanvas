@@ -20,7 +20,9 @@ const Canvas = () => {
     setCreateMode,
     clearCreateMode,
     clearSelection,
-    isLoading
+    isLoading,
+    currentUser,
+    addShape
   } = useCanvasStore();
   
   // Real-time shape synchronization
@@ -126,6 +128,7 @@ const Canvas = () => {
         };
         
         // Create new rectangle (Figma default size ~100x100)
+        // Include full metadata structure for sync architecture
         const newShape = {
           id: crypto.randomUUID(),
           type: 'rectangle',
@@ -134,9 +137,17 @@ const Canvas = () => {
           width: 100,
           height: 100,
           fill: '#E2E8F0', // Light gray default
+          // Metadata for sync architecture (PR #4 requirements)
+          createdBy: currentUser?.uid || 'unknown',
+          clientTimestamp: Date.now(), // for local comparison during sync
+          updatedAt: null, // will be set by server timestamp on sync
+          updatedBy: currentUser?.uid || 'unknown',
         };
         
-        // Sync to Firestore immediately (shape creation is not debounced)
+        // Add to local state immediately for instant feedback (PR #4 requirement)
+        addShape(newShape);
+        
+        // Sync to Firestore in background (non-blocking)
         createShape(newShape);
         
         // Keep create mode active (Figma behavior)

@@ -307,15 +307,23 @@ Build and refine the AI canvas manipulation system.
 
 ## Technical Architecture Notes
 
-### State Management (Hybrid Approach)
+### State Management (Hybrid Approach - Three-Tier System)
 
 **Local State (Zustand Store):**
 ```javascript
 {
+  // Tier 1: Authoritative local state (what renders)
   shapes: { [id]: { type, x, y, width, height, color, rotation, ... } },
   selectedIds: [],
   viewport: { x, y, zoom },
-  users: { [uid]: { name, cursor: { x, y }, color, online } }
+  users: { [uid]: { name, cursor: { x, y }, color, online } },
+  
+  // Tier 2: Pending writes tracking (prevents echo loops)
+  pendingWrites: { [shapeId]: timestamp },
+  
+  // Tier 3: Connection state
+  connectionState: 'connected' | 'disconnected' | 'reconnecting',
+  lastSyncTimestamp: number
 }
 ```
 
@@ -327,52 +335,78 @@ Build and refine the AI canvas manipulation system.
   - metadata - canvas settings, created date, etc.
 ```
 
-**Sync Flow:**
-1. User action (drag shape) → Update local Zustand state immediately
-2. Debounced sync (100ms) → Write delta to Firestore
-3. Firestore listener → Receive remote changes
-4. Merge remote changes → Update local state if timestamp newer
+**Sync Flow (Single Direction - Critical!):**
+```
+WRITE PATH (One Way):
+User action → Update local Zustand → Mark pending write → Queue Firestore write → Batch commit
+
+READ PATH (Separate):
+Firestore listener → Check not our echo → Check timestamp newer → Update local Zustand
+
+NEVER: Firestore write triggers local update (prevents loops)
+```
+
+**Detailed Sync Steps:**
+1. **User action** (drag shape) → Update local Zustand state immediately (60 FPS)
+2. **Mark pending** → Add shapeId to pendingWrites map with timestamp
+3. **Queue write** → Add to write queue (debounced for drags, immediate for one-off operations)
+4. **Batch commit** → Flush queue to Firestore, clear pendingWrites on success
+5. **Remote listener** → Receives changes from other users
+6. **Echo prevention** → Skip if hasPendingWrites OR in pendingWrites map
+7. **Timestamp check** → Only update if remote.updatedAt > local.updatedAt
+8. **Apply update** → Update local Zustand with remote change
 
 **Conflict Resolution:**
-- Last write wins based on `updatedAt` timestamp
-- Each shape has `updatedAt` and `updatedBy` fields
-- Local changes always take precedence until sync
+- Server timestamp as authority (prevents clock skew)
+- Use Firestore serverTimestamp() for updatedAt
+- Client timestamp for immediate local decisions
+- Last write wins when timestamps compared
+- Each shape has: `updatedAt` (server), `clientTimestamp` (local), `updatedBy` (uid)
 
 ### Real-Time Sync Strategy
 
-**Cursor Updates:**
-- Throttled to 20Hz (50ms intervals)
-- Separate Firestore document per user
-- No persistence needed
+**Write Strategy by Operation Type:**
+- **During drag:** Debounced writes (100ms batching) - reduces from 10 writes/sec to 1-2 writes/sec
+- **Drag end:** Immediate write - ensures final position locked in
+- **One-off operations** (create, delete, color change): Immediate write
+- **Batch operations:** Single Firestore batch write for efficiency
 
-**Shape Updates:**
-- During drag: Debounced writes every 100ms
-- On drag end: Immediate final write
-- Other operations: Immediate write
-- Firestore onSnapshot listener for incoming changes
+**Cursor Updates (Separate Fast Path):**
+- Throttled to 20Hz (50ms intervals)
+- Separate Firestore document per user (users collection)
+- Non-blocking writes (failures don't affect shape sync)
+- No persistence needed (ephemeral data)
 
 **Presence System:**
-- Firestore onDisconnect() hooks
-- Heartbeat every 30s
+- Firestore onDisconnect() hooks to mark offline
+- Heartbeat every 30s to maintain online status
 - Mark offline after 45s of no heartbeat
+- Separate from shape and cursor sync
 
 ### Canvas Performance Optimization
 
 **Rendering:**
-- React-Konva layer separation (background, shapes, selection, cursors)
+- React-Konva layer separation (background, shapes, selection, cursors on separate layers)
 - Virtualization for layer panel (react-window)
-- Memoization of shape components
+- Memoization of shape components with React.memo
 - Batch updates using Konva.batchDraw()
+- Shape culling (only render visible shapes in viewport)
 
 **Event Handling:**
-- Debounce continuous events (drag, resize)
-- Throttle high-frequency events (cursor movement)
-- Use Konva hit detection for click/hover
+- Debounce continuous events (drag: 100ms batching)
+- Throttle high-frequency events (cursor: 50ms)
+- Use Konva hit detection for click/hover (efficient)
 
 **State Updates:**
-- Zustand for minimal re-renders
-- Selective subscriptions to state slices
-- Immer for immutable state updates
+- Zustand for minimal re-renders (better than Context)
+- Selective subscriptions to state slices (useCanvasStore(state => state.shapes[id]))
+- Immer for immutable state updates (built into Zustand)
+
+**Sync Performance:**
+- Firestore batch writes (reduce RTT overhead)
+- Debounced writes during continuous operations
+- Separate listeners for shapes, cursors, presence (isolation)
+- Connection state monitoring with auto-reconnect
 
 ### AI Agent Architecture
 
@@ -434,13 +468,28 @@ tools = [
 - Pitfall: Auth works but writes fail silently
 - Solution: Start with open rules for dev, add security after MVP
 
-❌ **Optimistic updates causing infinite loops**
+❌ **Optimistic updates causing infinite loops** (CRITICAL)
 - Pitfall: Local update → Firestore write → Firestore listener → Local update → loop
-- Solution: Check `hasPendingWrites` metadata, ignore local echoes
+- Solution: 
+  - NEVER update local state inside Firestore write callback
+  - Check `hasPendingWrites` metadata in listener
+  - Track pendingWrites in Zustand, ignore echoes
+  - Separate write path from read path completely
+
+❌ **Not separating write path from read path** (CRITICAL)
+- Pitfall: Same function updates local state AND writes to Firestore, creates loops
+- Solution:
+  - Write path: User action → Local state → Queue write → Firestore (one way)
+  - Read path: Firestore listener → Check not echo → Update local state (separate)
+  - NEVER let these paths cross
+
+❌ **Ghost objects from race conditions**
+- Pitfall: Create shape locally, then Firestore adds it again when sync completes
+- Solution: Use pending writes map, ignore shapes we just created until confirmed
 
 ❌ **Not handling disconnects**
 - Pitfall: User refreshes, loses connection, canvas breaks
-- Solution: Implement Firestore onDisconnect() hooks early
+- Solution: Implement Firestore onDisconnect() hooks early, test reconnection scenarios
 
 ❌ **Trying to sync too much data**
 - Pitfall: Sending full canvas state on every change
@@ -449,6 +498,10 @@ tools = [
 ❌ **Forgetting deployment until last minute**
 - Pitfall: Works locally, deployment issues eat all your time
 - Solution: Deploy "Hello World" in first 2 hours, deploy MVP version immediately when it works
+
+❌ **Mixing cursor and shape sync logic**
+- Pitfall: Cursor updates interfere with shape sync, hard to debug
+- Solution: Completely separate hooks and Firestore collections for cursors vs shapes
 
 ### Post-MVP Phase (Days 2-4)
 
@@ -671,5 +724,3 @@ tools = [
 ## Conclusion
 
 This PRD provides a clear roadmap from MVP to final submission. The hybrid state management approach balances simplicity with performance requirements. Focus on multiplayer first, then features, then AI.
-
-**Remember:** A simple canvas with bulletproof multiplayer beats a feature-rich canvas with broken collaboration.

@@ -13,9 +13,12 @@ export const useAuth = () => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         // User is signed in
+        // Extract display name from email prefix (e.g., "john.doe@company.com" -> "john.doe")
+        const displayName = user.email ? user.email.split('@')[0] : 'Unknown User';
         const userData = {
           uid: user.uid,
           email: user.email,
+          displayName: displayName,
         };
         setCurrentUser(userData);
       } else {

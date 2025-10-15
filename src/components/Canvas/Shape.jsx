@@ -3,7 +3,7 @@ import useCanvasStore from '../../store/canvasStore';
 import { useSyncShapes } from '../../hooks/useSyncShapes';
 
 const Shape = ({ shape }) => {
-  const { selectedIds, setSelectedIds, updateShape } = useCanvasStore();
+  const { selectedIds, setSelectedIds, updateShape, currentUser } = useCanvasStore();
   const { syncShape } = useSyncShapes();
   
   const isSelected = selectedIds.includes(shape.id);
@@ -40,11 +40,16 @@ const Shape = ({ shape }) => {
       y: e.target.y(),
     };
     
-    // Update local state immediately for smooth dragging
-    updateShape(shape.id, newPos);
+    // Update local state immediately for smooth dragging with metadata
+    const updateData = {
+      ...newPos,
+      clientTimestamp: Date.now(), // update local timestamp for sync comparison
+      updatedBy: currentUser?.uid || 'unknown',
+    };
+    updateShape(shape.id, updateData);
     
     // Sync to Firestore (debounced for performance)
-    const updatedShape = { ...shape, ...newPos };
+    const updatedShape = { ...shape, ...updateData };
     syncShape(updatedShape);
   };
   
@@ -57,11 +62,16 @@ const Shape = ({ shape }) => {
       y: e.target.y(),
     };
     
-    // Final local update
-    updateShape(shape.id, newPos);
+    // Final local update with metadata
+    const finalUpdateData = {
+      ...newPos,
+      clientTimestamp: Date.now(), // final timestamp for sync
+      updatedBy: currentUser?.uid || 'unknown',
+    };
+    updateShape(shape.id, finalUpdateData);
     
     // Final sync to Firestore (this will flush any pending debounced writes)
-    const updatedShape = { ...shape, ...newPos };
+    const updatedShape = { ...shape, ...finalUpdateData };
     syncShape(updatedShape);
   };
   

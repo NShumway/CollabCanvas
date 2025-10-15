@@ -67,7 +67,7 @@ const AuthGuard = ({ children }) => {
           
           <div className="flex items-center gap-4">
             <span className="text-sm text-gray-600">
-              {currentUser.email}
+              {currentUser.displayName || currentUser.email}
             </span>
             <button
               onClick={handleSignOut}
