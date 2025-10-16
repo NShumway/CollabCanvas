@@ -2,7 +2,7 @@ import { Rect } from 'react-konva';
 import useCanvasStore from '../../store/canvasStore';
 import { getSyncEngine } from '../../services/syncEngine';
 
-const Shape = ({ shape }) => {
+const Shape = ({ shape, onShapeDragStart, onShapeDragEnd }) => {
   const { selectedIds, setSelectedIds, currentUser } = useCanvasStore();
   
   const isSelected = selectedIds.includes(shape.id);
@@ -28,6 +28,11 @@ const Shape = ({ shape }) => {
   const handleDragStart = (e) => {
     // Prevent canvas panning while dragging shapes
     e.cancelBubble = true;
+    
+    // Notify Canvas that we're starting to drag (enables unified cursor tracking)
+    if (onShapeDragStart) {
+      onShapeDragStart();
+    }
   };
   
   const handleDragMove = (e) => {
@@ -39,6 +44,7 @@ const Shape = ({ shape }) => {
       y: e.target.y(),
     };
     
+    
     try {
       const syncEngine = getSyncEngine();
       
@@ -49,6 +55,7 @@ const Shape = ({ shape }) => {
       // 2. Queue write to Firestore (debounced for drag operations)
       const updatedShape = { ...shape, ...newPos };
       syncEngine.queueWrite(shape.id, updatedShape, false); // false = debounced
+      
     } catch (error) {
       console.warn('SyncEngine not available during drag, skipping sync:', error);
     }
@@ -57,6 +64,11 @@ const Shape = ({ shape }) => {
   const handleDragEnd = (e) => {
     // Prevent canvas panning while dragging shapes
     e.cancelBubble = true;
+    
+    // Notify Canvas that we're done dragging (disables unified cursor tracking)
+    if (onShapeDragEnd) {
+      onShapeDragEnd();
+    }
     
     const newPos = {
       x: e.target.x(),
@@ -73,6 +85,7 @@ const Shape = ({ shape }) => {
       // 2. Flush any pending writes immediately (end of drag operation)
       const updatedShape = { ...shape, ...newPos };
       syncEngine.queueWrite(shape.id, updatedShape, true); // true = immediate flush
+      
     } catch (error) {
       console.warn('SyncEngine not available during drag end, skipping sync:', error);
     }

@@ -83,7 +83,9 @@ export const useFirestoreSync = () => {
    * Handle individual shape updates with timestamp-based conflict resolution
    */
   const handleShapeUpdate = useCallback((shapeId, remoteData, isNewShape) => {
-    const existingShape = shapes[shapeId];
+    // Access shapes directly from store to avoid dependency
+    const currentShapes = useCanvasStore.getState().shapes;
+    const existingShape = currentShapes[shapeId];
     
     // Convert Firestore timestamp to JavaScript timestamp for comparison
     const remoteTimestamp = remoteData.updatedAt?.seconds 
@@ -123,7 +125,7 @@ export const useFirestoreSync = () => {
       });
       updateShape(shapeId, shapeData);
     }
-  }, [shapes, addShape, updateShape]);
+  }, [addShape, updateShape]);
   
   /**
    * Set up Firestore listener on component mount

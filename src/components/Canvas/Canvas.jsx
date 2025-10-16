@@ -1,9 +1,11 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useCallback } from 'react';
 import { Stage, Layer, Rect, Circle } from 'react-konva';
 import useCanvasStore from '../../store/canvasStore';
 import { useFirestoreSync } from '../../hooks/useFirestoreSync';
+import { useCursorSync } from '../../hooks/useCursorSync';
 import { createSyncEngine } from '../../services/syncEngine';
 import Shape from './Shape';
+import Cursor from './Cursor';
 
 const CANVAS_SIZE = 5000; // 5K x 5K canvas
 const MIN_ZOOM = 0.1;
@@ -12,7 +14,9 @@ const MAX_ZOOM = 3;
 const Canvas = () => {
   const stageRef = useRef(null);
   const syncEngineRef = useRef(null);
+  const cursorThrottleRef = useRef(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+  const [isDraggingShape, setIsDraggingShape] = useState(false);
   
   const { 
     viewport, 
@@ -23,11 +27,15 @@ const Canvas = () => {
     clearCreateMode,
     clearSelection,
     isLoading,
-    currentUser
+    currentUser,
+    users
   } = useCanvasStore();
   
   // READ PATH: Real-time shape synchronization from Firestore
   useFirestoreSync();
+  
+  // CURSOR SYNC: Real-time cursor positions (separate from shape sync)
+  const { writeCursorPosition } = useCursorSync();
   
   // WRITE PATH: Initialize SyncEngine for writing to Firestore
   useEffect(() => {
@@ -50,6 +58,91 @@ const Canvas = () => {
       }
     };
   }, []);
+  
+  // Store latest viewport in ref to avoid callback recreation on viewport changes
+  const viewportRef = useRef(viewport);
+  viewportRef.current = viewport;
+  
+  // Throttled cursor position update (50ms = 20Hz)
+  const updateCursorPosition = useCallback((pointer) => {
+    if (!currentUser) return;
+    
+    // Convert screen coordinates to world coordinates (account for pan/zoom)
+    const currentViewport = viewportRef.current;
+    const worldPos = {
+      x: (pointer.x - currentViewport.x) / currentViewport.zoom,
+      y: (pointer.y - currentViewport.y) / currentViewport.zoom,
+    };
+    
+    // Write cursor position to Firestore (non-blocking)
+    if (writeCursorPosition) {
+      writeCursorPosition(worldPos.x, worldPos.y);
+    }
+  }, [currentUser]);
+  
+  // UNIFIED EVENT COORDINATOR: Handles both cursor tracking and shape drag coordination
+  const handleUnifiedMouseMove = useCallback((e) => {
+    if (!currentUser) return;
+    
+    const stage = stageRef.current;
+    if (!stage) return;
+    
+    // Get mouse position from DOM event, then convert to stage coordinates
+    const rect = stage.container().getBoundingClientRect();
+    const pointer = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    };
+    
+    // ALWAYS handle cursor tracking (maintains existing throttling)
+    // Clear existing throttle timeout
+    if (cursorThrottleRef.current) {
+      clearTimeout(cursorThrottleRef.current);
+    }
+    
+    // Throttle to 50ms (20Hz) as specified in plan
+    cursorThrottleRef.current = setTimeout(() => {
+      updateCursorPosition(pointer);
+    }, 50);
+    
+    // CONDITIONALLY handle shape drag cursor updates (when dragging)
+    if (isDraggingShape) {
+      // Convert to world coordinates for shape-based cursor positioning
+      const worldPos = {
+        x: (pointer.x - viewport.x) / viewport.zoom,
+        y: (pointer.y - viewport.y) / viewport.zoom,
+      };
+      
+      
+      // Update cursor immediately during drag (no additional throttling)
+      if (writeCursorPosition) {
+        writeCursorPosition(worldPos.x, worldPos.y);
+      }
+    }
+  }, [currentUser, updateCursorPosition, isDraggingShape, viewport, writeCursorPosition]);
+  
+  // Cleanup cursor throttle on unmount
+  useEffect(() => {
+    return () => {
+      if (cursorThrottleRef.current) {
+        clearTimeout(cursorThrottleRef.current);
+      }
+    };
+  }, []);
+  
+  // Add native DOM mouse handler for unified event coordination
+  useEffect(() => {
+    const canvasContainer = stageRef.current?.container();
+    if (!canvasContainer) return;
+    
+    canvasContainer.addEventListener('mousemove', handleUnifiedMouseMove);
+    
+    return () => {
+      if (canvasContainer) {
+        canvasContainer.removeEventListener('mousemove', handleUnifiedMouseMove);
+      }
+    };
+  }, [handleUnifiedMouseMove]);
   
   // Update canvas dimensions (leave space for toolbar - 64px header + 64px toolbar)
   useEffect(() => {
@@ -234,7 +327,7 @@ const Canvas = () => {
         y={viewport.y}
         scaleX={viewport.zoom}
         scaleY={viewport.zoom}
-        draggable={createMode === null} // Only allow panning when not in create mode
+        draggable={createMode === null && !isDraggingShape} // Only allow panning when not creating or dragging shapes
         onDragEnd={handleDragEnd}
         onWheel={handleWheel}
         onClick={handleStageClick}
@@ -273,13 +366,20 @@ const Canvas = () => {
         {/* Shapes Layer */}
         <Layer>
           {Object.values(shapes).map((shape) => (
-            <Shape key={shape.id} shape={shape} />
+            <Shape 
+              key={shape.id} 
+              shape={shape} 
+              onShapeDragStart={() => setIsDraggingShape(true)}
+              onShapeDragEnd={() => setIsDraggingShape(false)}
+            />
           ))}
         </Layer>
         
-        {/* Cursors Layer - will be added in PR #6 */}
+        {/* Cursors Layer - Above shapes layer */}
         <Layer>
-          {/* Multiplayer cursors will be rendered here */}
+          {Object.values(users).map((user) => (
+            <Cursor key={user.uid} user={user} />
+          ))}
         </Layer>
       </Stage>
     </div>
