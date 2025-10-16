@@ -6,7 +6,7 @@
 
 ## 🚀 Live Demo
 
-**🔗 Deployed URL:** *[Will be updated after deployment testing]*
+**🔗 Deployed URL:** **https://canvascollab-ba367.web.app/**
 
 Test with multiple browsers to see real-time collaboration in action!
 
