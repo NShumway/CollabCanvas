@@ -1,13 +1,15 @@
 /**
- * useCursorSync - Multiplayer Cursor Sync (Separate Fast Path)
+ * useCursorSync - Multiplayer Cursor Sync + Presence (Merged)
  * 
  * CRITICAL: Completely separate from shape sync logic.
- * This handles ONLY cursor positions and user presence.
+ * This handles BOTH cursor positions AND user presence via cursor activity.
  * 
  * Architecture:
- * - Write cursor position to Firestore users/{userId} document
- * - Listen to users collection for other users' cursors
- * - Non-blocking writes (no await) for performance
+ * - Write cursor position + presence to Firestore users/{userId} document
+ * - Listen to users collection for other users' cursors + presence
+ * - Non-blocking writes (no await) for performance  
+ * - Cursor activity serves as presence indication (no separate heartbeats)
+ * - Browser event cleanup to mark users offline
  * - Separate from shape sync to avoid interference
  */
 
@@ -17,21 +19,7 @@ import { db } from '../services/firebase';
 import { getUsersRef } from '../services/firestore';
 import useCanvasStore from '../store/canvasStore';
 import { useAuth } from './useAuth';
-
-// Generate deterministic color from user ID
-const generateUserColor = (uid) => {
-  const colors = [
-    '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
-    '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9'
-  ];
-  
-  // Use hash of uid to pick consistent color
-  let hash = 0;
-  for (let i = 0; i < uid.length; i++) {
-    hash = uid.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return colors[Math.abs(hash) % colors.length];
-};
+import { generateUserColor } from '../utils/userColor';
 
 export const useCursorSync = () => {
   const { currentUser } = useAuth();
@@ -84,6 +72,8 @@ export const useCursorSync = () => {
     const unsubscribe = onSnapshot(usersRef, 
       (snapshot) => {
         const updatedUsers = {};
+        const now = Date.now();
+        const ACTIVITY_TIMEOUT = 30 * 1000; // 30 seconds - same as OnlineUsers component
         
         snapshot.docs.forEach(doc => {
           const userData = doc.data();
@@ -99,7 +89,19 @@ export const useCursorSync = () => {
             return;
           }
           
-          // Add user to updated users map
+          // Filter out users with stale activity (inactive for >30s)
+          // Handle Firestore Timestamp objects (same pattern as shape sync)
+          const lastSeenTime = userData.lastSeen?.seconds 
+            ? userData.lastSeen.seconds * 1000  // Firestore Timestamp
+            : userData.lastSeen instanceof Date 
+              ? userData.lastSeen.getTime()     // JavaScript Date
+              : new Date(userData.lastSeen).getTime(); // Date string
+          
+          if ((now - lastSeenTime) >= ACTIVITY_TIMEOUT) {
+            return; // User has been inactive too long
+          }
+          
+          // Add user to updated users map (active within last 30s)
           updatedUsers[userId] = {
             uid: userData.uid,
             displayName: userData.displayName,
@@ -132,14 +134,17 @@ export const useCursorSync = () => {
   }, [currentUser, setUsers]);
   
   /**
-   * Mark user as online when component mounts
+   * Set up presence system: mark online + cleanup on unmount  
+   * Cursor activity serves as presence indication - no separate heartbeats needed
    */
   useEffect(() => {
     if (!currentUser?.uid) return;
     
-    const markOnline = async () => {
+    const setupPresence = async () => {
       try {
         const userDocRef = doc(db, 'canvases', 'default-canvas', 'users', currentUser.uid);
+        
+        // Mark user as online now
         await setDoc(userDocRef, {
           uid: currentUser.uid,
           displayName: currentUser.displayName || currentUser.email?.split('@')[0] || 'Unknown',
@@ -147,13 +152,27 @@ export const useCursorSync = () => {
           online: true,
           lastSeen: new Date()
         }, { merge: true });
-        console.log('✅ Marked user as online for cursor sync');
+        
+        console.log('✅ Presence system setup: user marked online');
       } catch (error) {
-        console.warn('Error marking user online (non-critical):', error);
+        console.warn('Error setting up presence (non-critical):', error);
       }
     };
     
-    markOnline();
+    setupPresence();
+    
+    // Cleanup: manually mark offline on component unmount
+    return () => {
+      if (currentUser?.uid) {
+        const userDocRef = doc(db, 'canvases', 'default-canvas', 'users', currentUser.uid);
+        setDoc(userDocRef, {
+          online: false,
+          lastSeen: new Date()
+        }, { merge: true }).catch(error => {
+          console.warn('Error marking offline on unmount (non-critical):', error);
+        });
+      }
+    };
   }, [currentUser]);
   
   return {
