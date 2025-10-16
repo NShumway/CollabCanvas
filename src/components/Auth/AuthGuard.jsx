@@ -52,38 +52,23 @@ const AuthGuard = ({ children }) => {
     );
   }
   
-  // Show main app with sign out option if authenticated
+  // Show main app content if authenticated
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header with user info and sign out */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <h1 className="text-2xl font-bold text-gray-900">CollabCanvas</h1>
-            <span className="text-sm text-gray-500">
-              Real-time collaborative design
-            </span>
-          </div>
-          
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">
-              {currentUser.displayName || currentUser.email}
-            </span>
-            <button
-              onClick={handleSignOut}
-              className="text-sm text-gray-600 hover:text-gray-900 px-3 py-1 rounded hover:bg-gray-100 transition-colors"
-            >
-              Sign out
-            </button>
-          </div>
-        </div>
-      </header>
-      
-      {/* Main app content */}
-      <main className="flex-1">
-        {children}
-      </main>
-    </div>
+    <>
+      {children}
+      {/* Add user info and sign out to header - this will be integrated into the main header */}
+      <div className="fixed top-4 right-4 z-50 flex items-center gap-2 bg-gray-800 text-white px-3 py-2 rounded-lg shadow-lg">
+        <span className="text-sm">
+          {currentUser.displayName || currentUser.email}
+        </span>
+        <button
+          onClick={handleSignOut}
+          className="text-sm text-gray-300 hover:text-white px-2 py-1 rounded hover:bg-gray-700 transition-colors"
+        >
+          Sign out
+        </button>
+      </div>
+    </>
   );
 };
 
