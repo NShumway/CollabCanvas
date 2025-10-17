@@ -1,140 +1,138 @@
+# CollabCanvas - Architecture Overview
+
+Below is a full architectural representation of the CollabCanvas system, including frontend modules, backend Firebase services, AI integration, and data flows. This diagram reflects the current PRD and MVP foundation.
+
+```mermaid
 graph TB
-    subgraph "Client Browser"
-        subgraph "React Application"
-            App[App.jsx<br/>Auth Guard & Layout]
-            
-            subgraph "Components"
-                Auth[Auth Components<br/>LoginButton, AuthGuard]
-                Canvas[Canvas.jsx<br/>Konva Stage + Layers]
-                Shape[Shape.jsx<br/>Rectangle rendering]
-                Cursor[Cursor.jsx<br/>Multiplayer cursors]
-                Toolbar[Toolbar.jsx<br/>Create tools]
-                OnlineUsers[OnlineUsers.jsx<br/>Presence list]
-                ConnectionStatus[ConnectionStatus.jsx<br/>Connection indicator]
+    subgraph Client[Client Browser]
+        subgraph ReactApp[React Application]
+            App[App.jsx\nAuth Guard & Layout]
+            subgraph Components[Components]
+                Auth[Auth Components\nLoginButton, AuthGuard]
+                Canvas[Canvas.jsx\nKonva Stage + Layers]
+                Shape[Shape.jsx\nRect/Circle/Text rendering]
+                Cursor[Cursor.jsx\nMultiplayer cursors]
+                Toolbar[Toolbar.jsx\nCreate tools + shortcuts]
+                OnlineUsers[OnlineUsers.jsx\nPresence list]
+                ConnectionStatus[ConnectionStatus.jsx\nConnection indicator]
+                ChatPanel[ChatPanel.jsx\nAI chat + message history]
+                Comments[CommentsPanel.jsx\nPins + threads]
+                LayerPanel[LayerPanel.jsx\nZ-index controls]
+                ColorPicker[ColorPicker.jsx\nRecent/saved colors]
             end
-            
-            subgraph "State Management"
-                Store[Zustand Store<br/>shapes, viewport, users,<br/>selectedIds, currentUser<br/>pendingWrites, connectionState]
+
+            subgraph State[Zustand Store]
+                Store[canvasStore.js\nshapes, viewport, users,\nselectedIds, pendingWrites, connectionState, aiCommands, comments]
             end
-            
-            subgraph "Hooks - Read Paths"
-                useAuth[useAuth<br/>Auth state listener]
-                useFirestoreSync[useFirestoreSync<br/>Shape listener ONLY<br/>Echo prevention<br/>Timestamp comparison]
-                useCursorSync[useCursorSync<br/>Cursor listener ONLY<br/>Separate from shapes]
-                usePresence[usePresence<br/>Online/offline status]
-                useConnectionState[useConnectionState<br/>Network monitoring<br/>State reconciliation]
+
+            subgraph Hooks[Hooks - Read & Write Paths]
+                useAuth[useAuth.js\nAuth state listener]
+                useFirestoreSync[useFirestoreSync.js\nRead-only shape listener, echo prevention]
+                useCursorSync[useCursorSync.js\nCursor writes/listener]
+                usePresence[usePresence.js\nOnline/offline + heartbeat]
+                useConnectionState[useConnectionState.js\nReconnect reconciliation]
+                useAI[useAI.js\nSend AI commands + status updates]
             end
-            
-            subgraph "Services - Write Paths"
-                SyncEngine[SyncEngine<br/>applyLocalChange<br/>queueWrite<br/>flushWrites<br/>NO listeners here]
-                FirebaseService[firebase.js<br/>auth, db instances]
-                FirestoreService[firestore.js<br/>Collection refs]
+
+            subgraph Services[Services - Write Paths]
+                SyncEngine[syncEngine.js\napplyLocalChange, queueWrite, flushWrites (100ms debounce)]
+                FirestoreService[firestore.js\nCollection refs + helpers]
+                FirebaseService[firebase.js\nFirebase init, auth, db]
+                OpenAIService[openai.js\nFunction calling wrapper]
             end
         end
     end
-    
-    subgraph "Firebase Backend"
-        subgraph "Firebase Auth"
-            GoogleAuth[Google OAuth<br/>User authentication]
+
+    subgraph Firebase[Firebase Backend]
+        subgraph Auth[Firebase Auth]
+            GoogleAuth[Google OAuth\nUser Authentication]
         end
-        
-        subgraph "Firestore Database"
-            CanvasCollection[canvases/canvasId/]
-            
-            ShapesCollection[shapes/shapeId<br/>- id, type, x, y<br/>- width, height, fill<br/>- updatedAt server timestamp<br/>- clientTimestamp<br/>- updatedBy uid]
-            
-            UsersCollection[users/userId<br/>- uid, displayName<br/>- cursorX, cursorY<br/>- color, online, lastSeen]
-            
-            MetadataDoc[metadata<br/>- createdAt, createdBy]
+
+        subgraph DB[Firestore]
+            CanvasCollection[canvases/{canvasId}]
+            ShapesCollection[shapes/{shapeId}\n(id, type, x, y, width, height, fill, rotation, zIndex, updatedAt, updatedBy)]
+            UsersCollection[users/{userId}\n(uid, displayName, cursorX, cursorY, color, online, lastSeen)]
+            CommentsCollection[comments/{commentId}\n(text, author, x, y, replies, resolved, attachedToShape, createdAt)]
+            MetadataDoc[metadata\n(createdAt, createdBy)]
         end
     end
-    
-    subgraph "User Interactions"
-        User1[User 1 Browser]
-        User2[User 2 Browser]
-        UserN[User N Browser]
+
+    subgraph AI[AI Agent]
+        GPT[OpenAI GPT-4o\nFunction calling]
+        ToolRunner[ToolRunner.js\nMaps AI calls to sync-safe tool execution]
     end
-    
-    %% Auth Flow
-    App --> Auth
-    Auth --> useAuth
-    useAuth --> FirebaseService
-    FirebaseService --> GoogleAuth
-    GoogleAuth --> Store
-    
-    %% Canvas Rendering
+
+    %% Data & Control Flow
     App --> Canvas
+    App --> Toolbar
+    App --> ChatPanel
+    App --> OnlineUsers
+    App --> ConnectionStatus
+
     Canvas --> Shape
     Canvas --> Cursor
+    Canvas --> Comments
+    Canvas --> LayerPanel
+    Canvas --> ColorPicker
+
     Store --> Canvas
     Store --> Shape
     Store --> Cursor
-    
-    %% UI Components
-    App --> Toolbar
-    App --> OnlineUsers
-    App --> ConnectionStatus
-    Toolbar --> Store
-    OnlineUsers --> Store
-    ConnectionStatus --> Store
-    
-    %% WRITE PATH - One Way Only
-    Canvas -- User Action --> SyncEngine
-    SyncEngine -- 1 Update Local --> Store
-    SyncEngine -- 2 Mark Pending --> Store
-    SyncEngine -- 3 Queue Write --> FirestoreService
-    FirestoreService -- 4 Batch Commit --> ShapesCollection
-    
-    %% READ PATH - Separate from Write
-    ShapesCollection -.5 Real-time listener.-> useFirestoreSync
-    useFirestoreSync -- 6 Check hasPendingWrites --> useFirestoreSync
-    useFirestoreSync -- 7 Check timestamp --> useFirestoreSync
-    useFirestoreSync -- 8 Update if newer --> Store
-    
-    %% Cursor Sync - Separate Fast Path
-    Canvas -- Mouse Move --> useCursorSync
-    useCursorSync -- Throttled Write --> UsersCollection
-    UsersCollection -.Real-time listener.-> useCursorSync
+    Store --> Comments
+
+    SyncEngine --> FirestoreService
+    FirestoreService --> ShapesCollection
+    FirestoreService --> UsersCollection
+    FirestoreService --> CommentsCollection
+
+    useFirestoreSync --> Store
     useCursorSync --> Store
-    
-    %% Presence Flow - Separate
-    App --> usePresence
     usePresence --> UsersCollection
-    
-    %% Connection State
-    App --> useConnectionState
-    useConnectionState --> Store
-    useConnectionState -- Reconcile on reconnect --> ShapesCollection
-    
-    %% Firestore Structure
-    CanvasCollection --> ShapesCollection
-    CanvasCollection --> UsersCollection
-    CanvasCollection --> MetadataDoc
-    
-    %% Multi-user connections
-    User1 -.HTTP/WebSocket.-> FirebaseService
-    User2 -.HTTP/WebSocket.-> FirebaseService
-    UserN -.HTTP/WebSocket.-> FirebaseService
-    
-    %% Key Architecture Notes
-    Note1[CRITICAL: Write and Read paths<br/>are SEPARATE - never cross]
-    Note2[SyncEngine: Write path ONLY<br/>NO listeners in this file]
-    Note3[useFirestoreSync: Read path ONLY<br/>Echo prevention + timestamp check]
-    Note4[Cursor sync completely separate<br/>from shape sync]
-    
-    %% Styling
-    classDef componentStyle fill:#3b82f6,stroke:#1e40af,color:#fff
-    classDef storeStyle fill:#8b5cf6,stroke:#6d28d9,color:#fff
-    classDef hookStyle fill:#10b981,stroke:#059669,color:#fff
-    classDef serviceStyle fill:#f59e0b,stroke:#d97706,color:#fff
-    classDef firebaseStyle fill:#ef4444,stroke:#dc2626,color:#fff
-    classDef userStyle fill:#6366f1,stroke:#4f46e5,color:#fff
-    classDef noteStyle fill:#fbbf24,stroke:#f59e0b,color:#000
-    
-    class Auth,Canvas,Shape,Cursor,Toolbar,OnlineUsers,ConnectionStatus componentStyle
-    class Store storeStyle
-    class useAuth,useFirestoreSync,useCursorSync,usePresence,useConnectionState hookStyle
-    class SyncEngine,FirebaseService,FirestoreService serviceStyle
-    class GoogleAuth,CanvasCollection,ShapesCollection,UsersCollection,MetadataDoc firebaseStyle
-    class User1,User2,UserN userStyle
-    class Note1,Note2,Note3,Note4 noteStyle
+
+    GPT --> OpenAIService
+    OpenAIService --> ToolRunner
+    ToolRunner --> SyncEngine
+
+    %% Class styling
+    classDef comp fill:#3b82f6,stroke:#1e40af,color:#fff
+    classDef svc fill:#f59e0b,stroke:#d97706,color:#fff
+    classDef store fill:#8b5cf6,stroke:#6d28d9,color:#fff
+    classDef db fill:#ef4444,stroke:#dc2626,color:#fff
+
+    class Auth,Canvas,Shape,Cursor,Toolbar,OnlineUsers,ConnectionStatus,ChatPanel,Comments,LayerPanel,ColorPicker comp
+    class SyncEngine,FirestoreService,FirebaseService,OpenAIService,ToolRunner svc
+    class Store store
+    class ShapesCollection,UsersCollection,CommentsCollection,MetadataDoc db
+
+    %% Notes
+    Note1[CRITICAL: Write and Read paths MUST remain separate.\nSyncEngine: writes only; useFirestoreSync: read-only listener.]
+    Note2[AI actions route through ToolRunner → SyncEngine to reuse normal sync pipeline.]
+    Note3[Cursor sync: throttled writes (20Hz) separate from shapes.]
+
+    Note1 -.-> SyncEngine
+    Note2 -.-> ToolRunner
+    Note3 -.-> useCursorSync
+```
+
+---
+
+## Key Architectural Principles
+
+1. **Local-First, Real-Time Sync** — All actions are first applied locally in Zustand, then synced to Firestore asynchronously for speed and reliability.
+2. **Separated Read/Write Paths** — SyncEngine handles writes only, while listeners (hooks) manage reads. Prevents infinite loops and echo duplication.
+3. **AI as a First-Class User** — AI-generated changes follow the same sync path as human edits, ensuring full determinism across clients.
+4. **Component Isolation** — Shape, Cursor, Comments, and AI systems each operate in their own layer with distinct listeners and writes.
+5. **Conflict Resolution** — Timestamp-based "last write wins" ensures deterministic updates without locking.
+6. **Resilience** — Connection state tracking allows reconnection without data loss. Firestore ensures persistence.
+
+---
+
+## Future Scalability
+
+- **Virtualization & Worker Threads:** planned for heavy canvases (1000+ shapes).
+- **IndexedDB caching:** optional offline-first enhancement.
+- **Cloud Function hooks:** possible future backend validation or analytics.
+- **AI Tool Expansion:** extending `ToolRunner` with new functions as new commands are added (e.g., layout, theme, auto-alignment).
+
+---
+
