@@ -20,6 +20,7 @@ import { getUsersRef } from '../services/firestore';
 import useCanvasStore from '../store/canvasStore';
 import { useAuth } from './useAuth';
 import { generateUserColor } from '../utils/userColor';
+import { devLog } from '../utils/devSettings';
 
 export const useCursorSync = () => {
   const { currentUser } = useAuth();
@@ -49,12 +50,12 @@ export const useCursorSync = () => {
       // Use setDoc with merge to handle document creation
       setDoc(userDocRef, userData, { merge: true }).catch(error => {
         // Silently log cursor write errors (non-critical)
-        console.warn('Cursor position write error (non-critical):', error);
+        devLog.warn('Cursor position write error (non-critical):', error);
       });
       
     } catch (error) {
       // Catch and silently log cursor write errors (non-critical)
-      console.warn('Cursor sync error (non-critical):', error);
+      devLog.warn('Cursor sync error (non-critical):', error);
     }
   }, [currentUser]);
   
@@ -153,9 +154,9 @@ export const useCursorSync = () => {
           lastSeen: new Date()
         }, { merge: true });
         
-        console.log('✅ Presence system setup: user marked online');
+        devLog.sync('Presence system setup: user marked online');
       } catch (error) {
-        console.warn('Error setting up presence (non-critical):', error);
+        devLog.warn('Error setting up presence (non-critical):', error);
       }
     };
     
@@ -169,7 +170,7 @@ export const useCursorSync = () => {
           online: false,
           lastSeen: new Date()
         }, { merge: true }).catch(error => {
-          console.warn('Error marking offline on unmount (non-critical):', error);
+          devLog.warn('Error marking offline on unmount (non-critical):', error);
         });
       }
     };

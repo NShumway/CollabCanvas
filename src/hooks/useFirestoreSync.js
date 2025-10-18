@@ -16,6 +16,7 @@
 import { useEffect, useCallback } from 'react';
 import { listenToShapes } from '../services/firestore';
 import useCanvasStore from '../store/canvasStore';
+import { devLog } from '../utils/devSettings';
 
 /**
  * Hook to sync shapes from Firestore (Read Path Only)
@@ -37,13 +38,11 @@ export const useFirestoreSync = () => {
    */
   const handleRemoteChanges = useCallback((changes, error) => {
     if (error) {
-      console.error('❌ Firestore sync error:', error);
+      devLog.error('Firestore sync error:', error);
       return;
     }
     
     if (!changes || changes.length === 0) return;
-    
-    console.log('📡 Received', changes.length, 'shape changes from Firestore');
     
     changes.forEach(change => {
       const { type, data, id, hasPendingWrites: docHasPendingWrites } = change;
@@ -51,14 +50,12 @@ export const useFirestoreSync = () => {
       // CRITICAL ECHO PREVENTION CHECK #1:
       // Skip if document has pending writes (this is our local change being echoed back)
       if (docHasPendingWrites) {
-        console.log('🔄 Skipping echo (hasPendingWrites):', id);
         return;
       }
       
       // CRITICAL ECHO PREVENTION CHECK #2:
       // Skip if we have this shape in our pending writes map
       if (hasPendingWrite(id)) {
-        console.log('🔄 Skipping echo (in pendingWrites):', id);
         return;
       }
       
@@ -69,12 +66,11 @@ export const useFirestoreSync = () => {
           break;
           
         case 'removed':
-          console.log('🗑️ Remote shape deleted:', id);
           removeShape(id);
           break;
           
         default:
-          console.warn('Unknown change type:', type);
+          devLog.warn('Unknown change type:', type);
       }
     });
   }, [updateShape, addShape, removeShape, hasPendingWrite]);
@@ -98,10 +94,6 @@ export const useFirestoreSync = () => {
     // Only update if remote timestamp is newer than local timestamp
     // This implements "last write wins" conflict resolution
     if (existingShape && remoteTimestamp <= localTimestamp) {
-      console.log('⏰ Skipping stale remote update for shape:', shapeId, {
-        remote: new Date(remoteTimestamp).toISOString(),
-        local: new Date(localTimestamp).toISOString()
-      });
       return;
     }
     
@@ -116,13 +108,8 @@ export const useFirestoreSync = () => {
     };
     
     if (isNewShape || !existingShape) {
-      console.log('➕ Adding remote shape:', shapeId);
       addShape(shapeData);
     } else {
-      console.log('📝 Updating shape from remote:', shapeId, {
-        remoteTimestamp: new Date(remoteTimestamp).toISOString(),
-        localTimestamp: new Date(localTimestamp).toISOString()
-      });
       updateShape(shapeId, shapeData);
     }
   }, [addShape, updateShape]);
@@ -131,7 +118,6 @@ export const useFirestoreSync = () => {
    * Set up Firestore listener on component mount
    */
   useEffect(() => {
-    console.log('🎯 Setting up Firestore shape listener (Read Path)');
     setLoading(true);
     
     // Start listening to shape changes
@@ -143,10 +129,7 @@ export const useFirestoreSync = () => {
     });
     
     // Cleanup listener on unmount
-    return () => {
-      console.log('🧹 Cleaning up Firestore listener');
-      unsubscribe();
-    };
+    return unsubscribe;
   }, [handleRemoteChanges, setLoading]);
   
   // This hook doesn't return anything - it just manages the Firestore listener

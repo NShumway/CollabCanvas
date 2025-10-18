@@ -44,7 +44,7 @@ export const useConnectionState = () => {
     if (!currentUser?.uid) return;
     
     try {
-      console.log('🔄 Starting state reconciliation after reconnect...');
+      devLog.sync('Starting state reconciliation after reconnect...');
       setConnectionState('reconnecting');
       
       // Fetch current Firestore state
@@ -67,7 +67,7 @@ export const useConnectionState = () => {
         };
       });
       
-      console.log(`📊 Reconciliation: Found ${Object.keys(firestoreShapes).length} shapes in Firestore`);
+      devLog.sync(`Reconciliation: Found ${Object.keys(firestoreShapes).length} shapes in Firestore`);
       
       // Compare with local state and apply updates
       const currentTime = Date.now();
@@ -81,12 +81,12 @@ export const useConnectionState = () => {
           // Shape exists in Firestore but not locally - add it
           addShape(firestoreShape);
           updatesCount++;
-          console.log('➕ Added missing shape:', shapeId);
+          devLog.sync('Added missing shape:', shapeId);
         } else if (firestoreShape.updatedAt > localShape.updatedAt) {
           // Firestore version is newer - update local
           updateShape(shapeId, firestoreShape);
           updatesCount++;
-          console.log('📝 Updated stale shape:', shapeId);
+          devLog.sync('Updated stale shape:', shapeId);
         }
       });
       
@@ -95,7 +95,7 @@ export const useConnectionState = () => {
         if (!firestoreShapes[shapeId]) {
           removeShape(shapeId);
           updatesCount++;
-          console.log('🗑️ Removed deleted shape:', shapeId);
+          devLog.sync('Removed deleted shape:', shapeId);
         }
       });
       
@@ -104,17 +104,17 @@ export const useConnectionState = () => {
       Object.entries(pendingWrites).forEach(([shapeId, timestamp]) => {
         if (timestamp < staleThreshold) {
           removePendingWrite(shapeId);
-          console.log('🧹 Cleared stale pending write:', shapeId);
+          devLog.sync('Cleared stale pending write:', shapeId);
         }
       });
       
       setConnectionState('connected');
       setLastSyncTimestamp(currentTime);
       
-      console.log(`✅ State reconciliation complete: ${updatesCount} updates applied`);
+      devLog.sync(`State reconciliation complete: ${updatesCount} updates applied`);
       
     } catch (error) {
-      console.error('❌ State reconciliation failed:', error);
+      devLog.error('State reconciliation failed:', error);
       setConnectionState('disconnected');
     }
   }, [currentUser, shapes, addShape, updateShape, removeShape, setConnectionState, 
@@ -128,12 +128,12 @@ export const useConnectionState = () => {
     setConnectionState(navigator.onLine ? 'connected' : 'disconnected');
     
     const handleOnline = () => {
-      console.log('🌐 Network reconnected - triggering state reconciliation');
+      devLog.sync('Network reconnected - triggering state reconciliation');
       reconcileState();
     };
     
     const handleOffline = () => {
-      console.log('📴 Network disconnected');
+      devLog.sync('Network disconnected');
       setConnectionState('disconnected');
     };
     

@@ -15,10 +15,11 @@
 import { writeBatch, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
 import { getShapeRef } from './firestore';
+import { devLog } from '../utils/devSettings';
 
-// Debounce timing for different operations
-const DEBOUNCE_DELAY = 100; // 100ms for drag operations
-const IMMEDIATE_FLUSH = 0;   // 0ms for create/delete operations
+// Debounce timing for different operations  
+const SHAPE_DRAG_DEBOUNCE = 100; // 100ms for shape dragging (as specified)
+const IMMEDIATE_FLUSH = 0;       // 0ms for create/delete operations
 
 /**
  * SyncEngine class manages the write path to Firestore
@@ -86,6 +87,29 @@ export class SyncEngine {
     // Mark this shape as having a pending write (prevents echo loops)
     this.store.getState().addPendingWrite(shapeId, timestamp);
   }
+
+  /**
+   * Apply batch changes for performance (used during drag operations with many shapes)
+   * 
+   * @param {Array} batchUpdates - Array of {shapeId, updates} objects
+   */
+  applyBatchChanges(batchUpdates) {
+    if (!this.store || !batchUpdates.length) return;
+    
+    const store = this.store.getState();
+    
+    // Apply all local changes and queue writes in one operation
+    for (const { shapeId, updates } of batchUpdates) {
+      store.updateShape(shapeId, updates);
+      
+      // Queue write for Firestore (debounced) - DON'T mark as pending until actually writing
+      const shape = store.shapes[shapeId];
+      if (shape) {
+        const updatedShape = { ...shape, ...updates };
+        this.queueWrite(shapeId, updatedShape, false);
+      }
+    }
+  }
   
   /**
    * Queue a shape for writing to Firestore
@@ -109,7 +133,7 @@ export class SyncEngine {
     });
     
     // Set up flush timing
-    const delay = immediate ? IMMEDIATE_FLUSH : DEBOUNCE_DELAY;
+    const delay = immediate ? IMMEDIATE_FLUSH : SHAPE_DRAG_DEBOUNCE;
     
     if (immediate) {
       // Flush immediately for create/delete operations
@@ -132,7 +156,7 @@ export class SyncEngine {
   async flushWrites() {
     if (this.writeQueue.size === 0) return;
     if (!this.store) {
-      console.error('SyncEngine not initialized with store');
+      devLog.error('SyncEngine not initialized with store');
       return;
     }
     
@@ -140,6 +164,11 @@ export class SyncEngine {
       // Create batch write
       const batch = writeBatch(db);
       const shapesToWrite = Array.from(this.writeQueue.entries());
+      
+      // Mark shapes as pending writes RIGHT BEFORE actual Firestore write
+      shapesToWrite.forEach(([shapeId]) => {
+        this.store.getState().addPendingWrite(shapeId);
+      });
       
       // Add all queued shapes to batch
       shapesToWrite.forEach(([shapeId, shape]) => {
@@ -171,10 +200,10 @@ export class SyncEngine {
       // Update last sync timestamp
       this.store.getState().setLastSyncTimestamp();
       
-      console.log('✅ Synced', shapesToWrite.length, 'shapes to Firestore');
+      // Synced shapes to Firestore successfully
       
     } catch (error) {
-      console.error('❌ Error flushing writes to Firestore:', error);
+      devLog.error('Error flushing writes to Firestore:', error);
       
       // Don't clear pending writes on error - they'll be retried
       // Could implement exponential backoff retry here in post-MVP
@@ -218,10 +247,10 @@ export class SyncEngine {
       batch.delete(shapeRef);
       
       await batch.commit();
-      console.log('✅ Deleted shape', shapeId, 'from Firestore');
+      devLog.sync('Deleted shape', shapeId, 'from Firestore');
       
     } catch (error) {
-      console.error('❌ Error deleting shape from Firestore:', error);
+      devLog.error('Error deleting shape from Firestore:', error);
     }
   }
   
@@ -241,7 +270,7 @@ export class SyncEngine {
     // Clear write queue
     this.writeQueue.clear();
     
-    console.log('🧹 SyncEngine cleaned up');
+    // SyncEngine cleaned up
   }
 }
 

@@ -1,9 +1,12 @@
 import './services/firebase'; // Initialize Firebase
 import AuthGuard from './components/Auth/AuthGuard';
 import Canvas from './components/Canvas/Canvas';
+import { devSettings } from './utils/devSettings';
 import Toolbar from './components/UI/Toolbar';
 import OnlineUsers from './components/UI/OnlineUsers';
 import ConnectionStatus from './components/UI/ConnectionStatus';
+import LayerPanel from './components/UI/LayerPanel';
+import PerformanceMonitor from './components/UI/PerformanceMonitor';
 import { useConnectionState } from './hooks/useConnectionState';
 
 function App() {
@@ -29,12 +32,18 @@ function App() {
           {/* Sidebar */}
           <aside className="w-64 bg-gray-800 border-r border-gray-700 p-4 space-y-4">
             <Toolbar />
+            <LayerPanel />
             <OnlineUsers />
           </aside>
           
           {/* Canvas Area */}
-          <main className="flex-1">
+          <main className="flex-1 relative">
             <Canvas />
+            
+            {/* Dev Performance Monitor */}
+            {devSettings.showPerformanceMonitor && (
+              <PerformanceMonitor />
+            )}
           </main>
         </div>
       </div>

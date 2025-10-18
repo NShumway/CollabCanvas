@@ -3,7 +3,9 @@ import { create } from 'zustand';
 const useCanvasStore = create((set, get) => ({
   // Canvas shapes
   shapes: {},
+  shapeCount: 0, // Cached count for performance
   selectedIds: [],
+  selectedIdsSet: new Set(), // O(1) lookup performance
   
   // Viewport state
   viewport: {
@@ -32,13 +34,17 @@ const useCanvasStore = create((set, get) => ({
   createMode: null, // null | 'rectangle' | 'circle' | 'text' etc.
   
   // Shape actions
-  setShapes: (shapes) => set({ shapes }),
+  setShapes: (shapes) => set({ 
+    shapes,
+    shapeCount: Object.keys(shapes).length 
+  }),
   
   addShape: (shape) => set((state) => ({
     shapes: {
       ...state.shapes,
       [shape.id]: shape,
     },
+    shapeCount: state.shapeCount + 1,
   })),
   
   updateShape: (id, updates) => set((state) => ({
@@ -56,24 +62,199 @@ const useCanvasStore = create((set, get) => ({
   removeShape: (id) => set((state) => {
     const newShapes = { ...state.shapes };
     delete newShapes[id];
+    
+    // O(1) set-based removal instead of O(n) filter
+    const newSelectedIds = [];
+    const newSelectedIdsSet = new Set();
+    
+    for (const selectedId of state.selectedIds) {
+      if (selectedId !== id) {
+        newSelectedIds.push(selectedId);
+        newSelectedIdsSet.add(selectedId);
+      }
+    }
+    
     return {
       shapes: newShapes,
-      selectedIds: state.selectedIds.filter(selectedId => selectedId !== id),
+      shapeCount: Math.max(0, state.shapeCount - 1),
+      selectedIds: newSelectedIds,
+      selectedIdsSet: newSelectedIdsSet,
     };
   }),
   
   // Selection actions
-  setSelectedIds: (ids) => set({ selectedIds: Array.isArray(ids) ? ids : [ids] }),
+  setSelectedIds: (ids) => {
+    const idsArray = Array.isArray(ids) ? ids : [ids];
+    set({ 
+      selectedIds: idsArray,
+      selectedIdsSet: new Set(idsArray) 
+    });
+  },
   
-  addSelectedId: (id) => set((state) => ({
-    selectedIds: [...state.selectedIds, id],
-  })),
+  addSelectedId: (id) => set((state) => {
+    const newIds = [...state.selectedIds, id];
+    return {
+      selectedIds: newIds,
+      selectedIdsSet: new Set(newIds)
+    };
+  }),
   
-  removeSelectedId: (id) => set((state) => ({
-    selectedIds: state.selectedIds.filter(selectedId => selectedId !== id),
-  })),
+  removeSelectedId: (id) => set((state) => {
+    const newIds = state.selectedIds.filter(selectedId => selectedId !== id);
+    return {
+      selectedIds: newIds,
+      selectedIdsSet: new Set(newIds)
+    };
+  }),
   
-  clearSelection: () => set({ selectedIds: [] }),
+  clearSelection: () => set({ 
+    selectedIds: [],
+    selectedIdsSet: new Set()
+  }),
+  
+  // Multi-select helper actions
+  addToSelection: (id) => set((state) => {
+    // O(1) set operation instead of O(n) array recreation
+    if (state.selectedIdsSet.has(id)) return state; // Already selected
+    
+    const newIds = [...state.selectedIds, id];
+    const newSet = new Set(state.selectedIdsSet);
+    newSet.add(id);
+    
+    return { 
+      selectedIds: newIds,
+      selectedIdsSet: newSet
+    };
+  }),
+  
+  removeFromSelection: (id) => set((state) => {
+    // O(1) set operation instead of O(n) array recreation
+    if (!state.selectedIdsSet.has(id)) return state; // No change needed
+    
+    const newIds = state.selectedIds.filter(selectedId => selectedId !== id);
+    const newSet = new Set(state.selectedIdsSet);
+    newSet.delete(id);
+    
+    return {
+      selectedIds: newIds,
+      selectedIdsSet: newSet
+    };
+  }),
+  
+  selectAll: () => set((state) => {
+    const allIds = Object.keys(state.shapes);
+    return {
+      selectedIds: allIds,
+      selectedIdsSet: new Set(allIds)
+    };
+  }),
+  
+  // Batch operations for selected shapes
+  deleteSelectedShapes: () => set((state) => {
+    const newShapes = { ...state.shapes };
+    state.selectedIds.forEach(id => {
+      delete newShapes[id];
+    });
+    return {
+      shapes: newShapes,
+      selectedIds: [], // Clear selection after delete
+    };
+  }),
+  
+  duplicateSelectedShapes: () => set((state) => {
+    const newShapes = { ...state.shapes };
+    const newSelectedIds = [];
+    const DUPLICATE_OFFSET = 20; // px offset for duplicated shapes
+    
+    state.selectedIds.forEach(id => {
+      const originalShape = state.shapes[id];
+      if (originalShape) {
+        const newId = crypto.randomUUID();
+        const duplicatedShape = {
+          ...originalShape,
+          id: newId,
+          x: originalShape.x + DUPLICATE_OFFSET,
+          y: originalShape.y + DUPLICATE_OFFSET,
+          zIndex: (originalShape.zIndex || 0) + 1, // Place duplicates on top
+          updatedBy: state.currentUser?.uid || 'unknown',
+        };
+        newShapes[newId] = duplicatedShape;
+        newSelectedIds.push(newId);
+      }
+    });
+    
+    return {
+      shapes: newShapes,
+      selectedIds: newSelectedIds, // Select the duplicated shapes
+    };
+  }),
+  
+  // Z-index management
+  bringToFront: (shapeId) => set((state) => {
+    const shape = state.shapes[shapeId];
+    if (!shape) return state;
+    
+    const maxZIndex = Math.max(0, ...Object.values(state.shapes).map(s => s.zIndex || 0));
+    return {
+      shapes: {
+        ...state.shapes,
+        [shapeId]: {
+          ...shape,
+          zIndex: maxZIndex + 1,
+          updatedBy: state.currentUser?.uid || 'unknown',
+        },
+      },
+    };
+  }),
+  
+  sendToBack: (shapeId) => set((state) => {
+    const shape = state.shapes[shapeId];
+    if (!shape) return state;
+    
+    const minZIndex = Math.min(0, ...Object.values(state.shapes).map(s => s.zIndex || 0));
+    return {
+      shapes: {
+        ...state.shapes,
+        [shapeId]: {
+          ...shape,
+          zIndex: minZIndex - 1,
+          updatedBy: state.currentUser?.uid || 'unknown',
+        },
+      },
+    };
+  }),
+  
+  bringForward: (shapeId) => set((state) => {
+    const shape = state.shapes[shapeId];
+    if (!shape) return state;
+    
+    return {
+      shapes: {
+        ...state.shapes,
+        [shapeId]: {
+          ...shape,
+          zIndex: (shape.zIndex || 0) + 1,
+          updatedBy: state.currentUser?.uid || 'unknown',
+        },
+      },
+    };
+  }),
+  
+  sendBackward: (shapeId) => set((state) => {
+    const shape = state.shapes[shapeId];
+    if (!shape) return state;
+    
+    return {
+      shapes: {
+        ...state.shapes,
+        [shapeId]: {
+          ...shape,
+          zIndex: (shape.zIndex || 0) - 1,
+          updatedBy: state.currentUser?.uid || 'unknown',
+        },
+      },
+    };
+  }),
   
   // Viewport actions
   setViewport: (viewport) => set({ viewport }),

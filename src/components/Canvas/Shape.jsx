@@ -1,95 +1,11 @@
+import React from 'react';
 import { Rect } from 'react-konva';
 import useCanvasStore from '../../store/canvasStore';
-import { getSyncEngine } from '../../services/syncEngine';
 
-const Shape = ({ shape, onShapeDragStart, onShapeDragEnd }) => {
-  const { selectedIds, setSelectedIds, currentUser } = useCanvasStore();
+const Shape = React.memo(({ shape }) => {
+  const selectedIdsSet = useCanvasStore(state => state.selectedIdsSet); // Only subscribe to selection
   
-  const isSelected = selectedIds.includes(shape.id);
-  
-  const handleClick = (e) => {
-    e.cancelBubble = true; // Prevent canvas click
-    
-    // Figma-style selection: replace selection unless Shift is held
-    if (e.evt.shiftKey) {
-      if (isSelected) {
-        // Remove from selection
-        setSelectedIds(selectedIds.filter(id => id !== shape.id));
-      } else {
-        // Add to selection
-        setSelectedIds([...selectedIds, shape.id]);
-      }
-    } else {
-      // Replace selection
-      setSelectedIds([shape.id]);
-    }
-  };
-  
-  const handleDragStart = (e) => {
-    // Prevent canvas panning while dragging shapes
-    e.cancelBubble = true;
-    
-    // Notify Canvas that we're starting to drag (enables unified cursor tracking)
-    if (onShapeDragStart) {
-      onShapeDragStart();
-    }
-  };
-  
-  const handleDragMove = (e) => {
-    // Prevent canvas panning while dragging shapes
-    e.cancelBubble = true;
-    
-    const newPos = {
-      x: e.target.x(),
-      y: e.target.y(),
-    };
-    
-    
-    try {
-      const syncEngine = getSyncEngine();
-      
-      // WRITE PATH: Use SyncEngine for bulletproof sync
-      // 1. Apply local change immediately (60fps UX)
-      syncEngine.applyLocalChange(shape.id, newPos);
-      
-      // 2. Queue write to Firestore (debounced for drag operations)
-      const updatedShape = { ...shape, ...newPos };
-      syncEngine.queueWrite(shape.id, updatedShape, false); // false = debounced
-      
-    } catch (error) {
-      console.warn('SyncEngine not available during drag, skipping sync:', error);
-    }
-  };
-  
-  const handleDragEnd = (e) => {
-    // Prevent canvas panning while dragging shapes
-    e.cancelBubble = true;
-    
-    // Notify Canvas that we're done dragging (disables unified cursor tracking)
-    if (onShapeDragEnd) {
-      onShapeDragEnd();
-    }
-    
-    const newPos = {
-      x: e.target.x(),
-      y: e.target.y(),
-    };
-    
-    try {
-      const syncEngine = getSyncEngine();
-      
-      // WRITE PATH: Use SyncEngine for bulletproof sync
-      // 1. Apply final local change
-      syncEngine.applyLocalChange(shape.id, newPos);
-      
-      // 2. Flush any pending writes immediately (end of drag operation)
-      const updatedShape = { ...shape, ...newPos };
-      syncEngine.queueWrite(shape.id, updatedShape, true); // true = immediate flush
-      
-    } catch (error) {
-      console.warn('SyncEngine not available during drag end, skipping sync:', error);
-    }
-  };
+  const isSelected = selectedIdsSet.has(shape.id); // O(1) instead of O(n)
   
   // Default shape styles (Figma-like)
   const baseStyle = {
@@ -107,32 +23,16 @@ const Shape = ({ shape, onShapeDragStart, onShapeDragEnd }) => {
         width={shape.width}
         height={shape.height}
         {...baseStyle}
-        draggable={isSelected} // Only selected shapes are draggable
-        onClick={handleClick}
-        onDragStart={handleDragStart}
-        onDragMove={handleDragMove}
-        onDragEnd={handleDragEnd}
-        // Figma-style hover effect
-        onMouseEnter={(e) => {
-          if (!isSelected) {
-            e.target.stroke('#94A3B8'); // Gray hover outline
-            e.target.strokeWidth(1);
-            e.target.getLayer().batchDraw();
-          }
-        }}
-        onMouseLeave={(e) => {
-          if (!isSelected) {
-            e.target.stroke('transparent');
-            e.target.strokeWidth(0);
-            e.target.getLayer().batchDraw();
-          }
-        }}
+        listening={false} // Canvas handles all mouse interactions now
+        // Figma-style hover effect (Canvas will handle hover via shape detection if needed)
       />
     );
   }
   
   // Future: Handle other shape types (circle, text, etc.)
   return null;
-};
+});
+
+Shape.displayName = 'Shape';
 
 export default Shape;

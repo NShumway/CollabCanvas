@@ -10,17 +10,59 @@
 
 Test with multiple browsers to see real-time collaboration in action!
 
-## 📋 MVP Features Completed
+## 🎨 Current Features
 
-### ✅ Core Multiplayer Features
+### ✅ Canvas & Shapes
+- **Shape Creation** - Rectangle creation tool with click-to-place interaction
+- **Multi-Select** - Drag-to-select rectangle or Shift+click to select multiple shapes
+- **Shape Management** - Delete, duplicate, and organize shapes with z-index layering
+- **Layer Panel** - Visual layer management with drag reordering
+- **Real-time Shape Sync** - All shape operations sync across users in <100ms
+
+### ✅ Interaction & Navigation
+- **Pan & Zoom** - Smooth 60 FPS navigation with mouse/trackpad
+- **Space + Drag Panning** - Figma-style panning with Space key
+- **Multi-shape Dragging** - Select and move multiple shapes together
+- **Keyboard Shortcuts** - Full shortcut support (see reference below)
+- **Visual Feedback** - Selection rectangles, cursor states, and interaction hints
+
+### ✅ Collaboration Features  
 - **Google OAuth Authentication** - Secure user identity with persistent sessions
 - **Real-time Multiplayer Cursors** - See other users' cursors with names and colors (<50ms sync)
-- **Canvas with Pan & Zoom** - Smooth 60 FPS navigation with mouse/trackpad controls
-- **Shape Creation** - Rectangle creation tool with click-to-place interaction
-- **Real-time Shape Synchronization** - Drag shapes with <100ms sync between users
 - **Presence System** - Online users list with real-time join/leave updates
 - **Connection State Monitoring** - Visual indicators for connection status
 - **State Persistence** - All changes saved to Firestore, survive disconnects and refreshes
+
+### 🎹 Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|---------|
+| **Space + Drag** | Pan around canvas |
+| **Click + Drag** | Select shapes / Create selection rectangle |
+| **Shift + Click** | Add/remove shapes from selection |
+| **Delete / Backspace** | Delete selected shapes |
+| **Ctrl + A** | Select all shapes |
+| **Ctrl + D** | Duplicate selected shapes |
+| **Ctrl + ]** | Bring selected shapes forward |
+| **Ctrl + [** | Send selected shapes backward |
+| **Escape** | Clear selection and exit create mode |
+
+### 📱 Interaction Guide
+
+**Creating Shapes:**
+1. Click rectangle tool in toolbar
+2. Click on canvas to place shape
+3. Shape appears instantly across all users
+
+**Multi-Select Workflow:**
+1. **Drag selection:** Click empty area and drag to select multiple shapes
+2. **Add to selection:** Hold Shift and click shapes to add/remove
+3. **Batch operations:** Delete, duplicate, or move multiple shapes at once
+
+**Layer Management:**
+1. Use Layer Panel on right sidebar to see all shapes
+2. Drag shapes in panel to reorder layers
+3. Use Ctrl+] / Ctrl+[ shortcuts for quick layer changes
 
 ### ✅ Technical Architecture
 - **Bulletproof Sync Engine** - Prevents infinite loops, ghost objects, and race conditions
@@ -146,6 +188,13 @@ firebase deploy
 5. Create rectangle in one window, verify it appears in other
 6. Drag rectangle in one window, verify smooth sync in other
 
+**Multi-Select & Operations:**
+1. Create 3-4 rectangles in one window
+2. Drag-select multiple shapes, verify selection syncs to other window
+3. Press Delete key, verify shapes deleted in both windows
+4. Press Ctrl+D to duplicate, verify duplicates appear in both windows
+5. Test Layer Panel reordering, verify z-order changes sync
+
 **Edge Cases Testing:**
 1. **Rapid Creation:** Click create button 10 times rapidly - no duplicates should appear
 2. **Simultaneous Editing:** Both users drag same shape - should sync smoothly
@@ -227,29 +276,35 @@ canvases/{canvasId}/
     └── createdBy: string
 ```
 
-## 🔮 Post-MVP Roadmap
+## 🔮 Roadmap & Next Features
 
-### Phase 2: Enhanced Canvas (Days 2-4)
-- Additional shapes (circles, lines, text)
-- Resize and rotation handles
-- Multi-select and layer management
+### ✅ Completed (Post-MVP)
+- ✅ **Multi-select and layer management** - Drag-to-select, z-index controls, Layer Panel
+- ✅ **Delete and duplicate operations** - Full keyboard shortcut support
+- ✅ **Enhanced interaction** - Space+drag panning, multi-shape operations
+
+### 🚧 Phase 2: Additional Shapes (Next)
+- Circle, line, and text shape types
+- Resize and rotation handles  
 - Color picker and styling options
-- Delete, duplicate, copy/paste operations
+- Copy/paste operations
 
-### Phase 3: AI Agent (Days 5-7)
-- Natural language shape creation
-- AI-powered layout assistance
+### 🔮 Phase 3: AI Agent (Future)
+- Natural language shape creation ("Create a red circle")
+- AI-powered layout assistance ("Arrange these in a grid")
 - Complex operation planning
 - Chat interface for commands
 
-## ⚠️ Known Limitations
+## ⚠️ Current Limitations
 
-### MVP Scope Limitations:
-- **Single shape type:** Only rectangles (by design for MVP)
-- **No shape editing:** Can't resize, rotate, or change colors
-- **No shape deletion:** Created shapes are permanent (Post-MVP feature)
+### Shape Types & Editing:
+- **Single shape type:** Only rectangles (circles, lines, text coming in next release)
+- **No resize/rotation:** Shapes are fixed size after creation
+- **No color editing:** Default colors only (color picker in development)
+
+### Canvas & Access:
 - **Single canvas:** All users share one canvas (`default-canvas`)
-- **No access control:** No distinction between canvas owners and collaborators
+- **No access control:** No distinction between canvas owners and collaborators  
 - **Basic error handling:** Network errors may require refresh
 
 ### UI/UX Issues:
@@ -308,8 +363,8 @@ canvases/{canvasId}/
 
 ## 🏆 Project Status
 
-**✅ MVP COMPLETE** - All 24-hour gate requirements met
+**✅ ENHANCED CANVAS COMPLETE** - Multi-select, layer management, and advanced interactions implemented
 
-**Ready for Post-MVP features** - Architecture proven solid under testing
+**Ready for Phase 2** - Additional shape types, transforms, and AI integration
 
 Built for the 7-day CollabCanvas sprint challenge with focus on **bulletproof multiplayer architecture** over feature quantity.

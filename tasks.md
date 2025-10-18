@@ -44,6 +44,7 @@ The following PRs have been completed successfully:
    - Implement bring forward/back functions.
    - Add `LayerPanel` component for visual layer reordering.
    - Keyboard shortcuts (Ctrl+], Ctrl+[).
+   - **⚠️ Note**: Z-index testing limited without shape colors - revisit after PR #9 (Shape Colors)
 5. **Unit Tests**: Multi-select logic, delete operations, z-index calculations
 6. Acceptance: Multi-select, delete, duplicate, and z-order persist across all clients.
 
