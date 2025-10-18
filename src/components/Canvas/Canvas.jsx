@@ -551,6 +551,9 @@ const Canvas = () => {
           syncEngineRef.current.queueWrite(newShape.id, newShape, true);
         }
         
+        // Clear selection after placing shape (consistent with background click behavior)
+        clearSelection();
+        
       } else {
         // No create mode - either start drag-to-select or clear selection
         
