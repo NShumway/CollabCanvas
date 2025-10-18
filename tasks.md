@@ -44,14 +44,41 @@ The following PRs have been completed successfully:
    - Implement bring forward/back functions.
    - Add `LayerPanel` component for visual layer reordering.
    - Keyboard shortcuts (Ctrl+], Ctrl+[).
-   - **⚠️ Note**: Z-index testing limited without shape colors - revisit after PR #9 (Shape Colors)
-5. **Unit Tests**: Multi-select logic, delete operations, z-index calculations
+   - **⚠️ Note**: Full z-index testing with visual verification will be completed in PR #9 with color features
+5. **Unit Tests**: Multi-select logic, delete operations, basic z-index calculations
 6. Acceptance: Multi-select, delete, duplicate, and z-order persist across all clients.
 
 ---
 
-## PR #9 — Additional Shapes: Circle, Line, Text
-**Goal:** Add circle, line, and text shape types with full sync support.
+## PR #8.5 — TypeScript Migration
+**Goal:** Convert entire codebase from JavaScript to TypeScript for better type safety and developer experience.
+
+### Tasks
+1. **Setup & Configuration**
+   - Install TypeScript and necessary @types packages
+   - Configure tsconfig.json with appropriate compiler options
+   - Update Vite configuration for TypeScript support
+   - Convert package.json scripts if needed
+2. **Core Files Conversion**
+   - Convert all .js/.jsx files to .ts/.tsx
+   - Add proper type definitions for all components, hooks, and services
+   - Define interfaces for Zustand store state and actions
+   - Type Firebase/Firestore data structures
+3. **Type Definitions**
+   - Create comprehensive type definitions for shapes, users, canvas state
+   - Define proper types for all props, state, and function parameters
+   - Add types for external libraries (Konva, Firebase, etc.)
+4. **Validation & Testing**
+   - Resolve all TypeScript compilation errors
+   - Update existing tests to work with TypeScript
+   - Ensure no type-related runtime issues
+5. **Unit Tests**: Type safety validation, no regressions in functionality
+6. Acceptance: Full TypeScript compilation with strict mode, all existing functionality preserved.
+
+---
+
+## PR #9 — Additional Shapes + Colors + Z-Index Testing
+**Goal:** Add circle, line, and text shape types with color picker and comprehensive z-index testing.
 
 ### Tasks
 1. **Circle shape implementation**
@@ -66,8 +93,19 @@ The following PRs have been completed successfully:
    - Add `text` type with `text, fontSize, fontFamily, textAlign, fill` properties.
    - Update `Shape.jsx` to render `<Text>` components.
    - Add text creation tool to toolbar.
-4. **Unit Tests**: New shape creation, rendering, and sync
-5. Acceptance: All shape types create, render, and sync correctly across clients.
+4. **Color Picker Integration**
+   - Full color picker component with hex input
+   - Recent colors row (session-based)
+   - Saved colors palette (user-persistent in Firestore users/{uid}/palette)
+   - Apply colors to selected shapes with multi-selection support
+   - Update shape `fill` property and sync changes
+5. **Comprehensive Z-Index Testing**
+   - Test z-index functionality with colored shapes for visual verification
+   - Validate layer ordering with different shape types and colors
+   - Test bring forward/back operations with visual feedback
+   - Verify LayerPanel functionality with colored shapes
+6. **Unit Tests**: New shape creation, rendering, sync, color picker logic, z-index with colors
+7. Acceptance: All shape types create/render/sync correctly, color changes sync immediately, z-index operations work reliably with visual confirmation.
 
 ---
 
@@ -136,27 +174,7 @@ The following PRs have been completed successfully:
 
 ---
 
-## PR #13 — Color Picker & Palette Management
-**Goal:** Add color picker with saved and recent colors.
-
-### Tasks
-1. **Color picker component**
-   - Full color picker with hex input.
-   - Recent colors row (session-based).
-   - Saved colors palette (user-persistent).
-2. **Color application**
-   - Apply colors to selected shapes.
-   - Support multi-selection color changes.
-   - Update shape `fill` property and sync.
-3. **Palette persistence**
-   - Save user color palettes to Firestore `users/{uid}/palette`.
-   - Load saved colors on login.
-4. **Unit Tests**: Color picker logic, palette persistence
-5. Acceptance: Color changes sync immediately; saved palettes persist across sessions.
-
----
-
-## PR #14 — Copy/Paste & Keyboard Shortcuts
+## PR #13 — Copy/Paste & Keyboard Shortcuts
 **Goal:** Implement internal clipboard and comprehensive keyboard shortcuts.
 
 ### Tasks
@@ -183,7 +201,7 @@ The following PRs have been completed successfully:
 
 ---
 
-## PR #15 — AI Integration: Foundation + Core Tool
+## PR #14 — AI Integration: Foundation + Core Tool
 **Goal:** Integrate OpenAI GPT-4o with basic infrastructure and 1 core tool.
 
 ### Tasks
@@ -214,7 +232,7 @@ The following PRs have been completed successfully:
 
 ---
 
-## PR #16 — AI: Essential Tools Expansion  
+## PR #15 — AI: Essential Tools Expansion  
 **Goal:** Add 3 more essential AI tools for shape manipulation.
 
 ### Tasks
@@ -236,7 +254,7 @@ The following PRs have been completed successfully:
 
 ---
 
-## PR #17 — AI: Layout & Composite Tools
+## PR #16 — AI: Layout & Composite Tools
 **Goal:** Add advanced layout tools and template creation.
 
 ### Tasks
@@ -264,7 +282,7 @@ The following PRs have been completed successfully:
 
 ---
 
-## PR #18 — Collaborative Comments System
+## PR #17 — Collaborative Comments System
 **Goal:** Add comment pins on canvas with threaded replies and real-time sync.
 
 ### Tasks
@@ -288,7 +306,7 @@ The following PRs have been completed successfully:
 
 ---
 
-## PR #19 — Polish, Documentation & Deployment
+## PR #18 — Polish, Documentation & Deployment
 **Goal:** Final UI polish, comprehensive documentation, and deployment preparation.
 
 ### Tasks
@@ -324,28 +342,28 @@ The following PRs have been completed successfully:
 
 ## FLEX GOALS (Optional Enhancements)
 
-### PR #20 — Performance Optimization (Flex Goal)
+### PR #19 — Performance Optimization (Flex Goal)
 **Goal:** Scale to 500+ shapes while maintaining 60 FPS performance.
 - Implement viewport-based shape culling
 - Optimize re-renders with React.memo
 - Add selective Zustand subscriptions
 - Optional Web Worker integration for heavy operations
 
-### PR #21 — Advanced Features (Flex Goal) 
+### PR #20 — Advanced Features (Flex Goal) 
 **Goal:** Professional-grade features for power users.
 - Multi-canvas support with routing
 - Advanced keyboard shortcut customization  
 - Export/import functionality (JSON, SVG)
 - Advanced shape grouping and locking
 
-### PR #22 — Auth & Security (Flex Goal)
+### PR #21 — Auth & Security (Flex Goal)
 **Goal:** Production-grade security and session management.
 - Handle auth token expiry gracefully
 - Implement Firestore security rules
 - Add user session monitoring
 - Basic usage analytics and monitoring
 
-### PR #23 — Advanced UI/UX (Flex Goal)
+### PR #22 — Advanced UI/UX (Flex Goal)
 **Goal:** Premium user experience enhancements.
 - Advanced loading spinners and progress indicators
 - Toast notification system
@@ -365,9 +383,9 @@ The following PRs have been completed successfully:
 
 ### **Code Cleanup Strategy**
 - **Cleanup Sweep #1** (PR #11): After core canvas features - remove early development artifacts
-- **Cleanup Sweep #2** (PR #14): Pre-AI integration - ensure clean foundation for AI features  
-- **Cleanup Sweep #3** (PR #17): Post-AI integration - clean up AI development artifacts
-- **Final Cleanup** (PR #19): Pre-deployment - production-ready code audit
+- **Cleanup Sweep #2** (PR #13): Pre-AI integration - ensure clean foundation for AI features  
+- **Cleanup Sweep #3** (PR #16): Post-AI integration - clean up AI development artifacts
+- **Final Cleanup** (PR #18): Pre-deployment - production-ready code audit
 
 ### **Cross-PR Acceptance Criteria**
 - **Sync Rules**: Maintain separation of read/write paths throughout

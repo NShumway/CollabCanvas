@@ -29,6 +29,7 @@ Add professional-grade usability features and performance optimization.
 
 ### Frontend
 - **Framework:** React 18 + Vite  
+- **Language:** TypeScript (strict mode)  
 - **Canvas Library:** React-Konva (Canvas API wrapper)  
 - **State Management:** Zustand  
 - **Styling:** Tailwind CSS  
@@ -349,6 +350,7 @@ All AI edits follow normal sync paths, ensuring deterministic replication.
 **Technical**
 - Maintain proven sync isolation (no mixed paths)  
 - Extend existing sync pattern to all new features  
+- TypeScript ensures type safety across complex collaborative features
 - Test every feature with 2+ browsers  
 
 **Feature**

@@ -6,39 +6,39 @@ Below is a full architectural representation of the CollabCanvas system, includi
 graph TB
     subgraph Client[Client Browser]
         subgraph ReactApp[React Application]
-            App[App.jsx\nAuth Guard & Layout]
+            App[App.tsx\nAuth Guard & Layout]
             subgraph Components[Components]
                 Auth[Auth Components\nLoginButton, AuthGuard]
-                Canvas[Canvas.jsx\nKonva Stage + Layers]
-                Shape[Shape.jsx\nRect/Circle/Text rendering]
-                Cursor[Cursor.jsx\nMultiplayer cursors]
-                Toolbar[Toolbar.jsx\nCreate tools + shortcuts]
-                OnlineUsers[OnlineUsers.jsx\nPresence list]
-                ConnectionStatus[ConnectionStatus.jsx\nConnection indicator]
-                ChatPanel[ChatPanel.jsx\nAI chat + message history]
-                Comments[CommentsPanel.jsx\nPins + threads]
-                LayerPanel[LayerPanel.jsx\nZ-index controls]
-                ColorPicker[ColorPicker.jsx\nRecent/saved colors]
+                Canvas[Canvas.tsx\nKonva Stage + Layers]
+                Shape[Shape.tsx\nRect/Circle/Text rendering]
+                Cursor[Cursor.tsx\nMultiplayer cursors]
+                Toolbar[Toolbar.tsx\nCreate tools + shortcuts]
+                OnlineUsers[OnlineUsers.tsx\nPresence list]
+                ConnectionStatus[ConnectionStatus.tsx\nConnection indicator]
+                ChatPanel[ChatPanel.tsx\nAI chat + message history]
+                Comments[CommentsPanel.tsx\nPins + threads]
+                LayerPanel[LayerPanel.tsx\nZ-index controls]
+                ColorPicker[ColorPicker.tsx\nRecent/saved colors]
             end
 
             subgraph State[Zustand Store]
-                Store[canvasStore.js\nshapes, viewport, users,\nselectedIds, pendingWrites, connectionState, aiCommands, comments]
+                Store[canvasStore.ts\nshapes, viewport, users,\nselectedIds, pendingWrites, connectionState, aiCommands, comments]
             end
 
             subgraph Hooks[Hooks - Read & Write Paths]
-                useAuth[useAuth.js\nAuth state listener]
-                useFirestoreSync[useFirestoreSync.js\nRead-only shape listener, echo prevention]
-                useCursorSync[useCursorSync.js\nCursor writes/listener]
-                usePresence[usePresence.js\nOnline/offline + heartbeat]
-                useConnectionState[useConnectionState.js\nReconnect reconciliation]
-                useAI[useAI.js\nSend AI commands + status updates]
+                useAuth[useAuth.ts\nAuth state listener]
+                useFirestoreSync[useFirestoreSync.ts\nRead-only shape listener, echo prevention]
+                useCursorSync[useCursorSync.ts\nCursor writes/listener]
+                usePresence[usePresence.ts\nOnline/offline + heartbeat]
+                useConnectionState[useConnectionState.ts\nReconnect reconciliation]
+                useAI[useAI.ts\nSend AI commands + status updates]
             end
 
             subgraph Services[Services - Write Paths]
-                SyncEngine[syncEngine.js\napplyLocalChange, queueWrite, flushWrites (100ms debounce)]
-                FirestoreService[firestore.js\nCollection refs + helpers]
-                FirebaseService[firebase.js\nFirebase init, auth, db]
-                OpenAIService[openai.js\nFunction calling wrapper]
+                SyncEngine[syncEngine.ts\napplyLocalChange, queueWrite, flushWrites (100ms debounce)]
+                FirestoreService[firestore.ts\nCollection refs + helpers]
+                FirebaseService[firebase.ts\nFirebase init, auth, db]
+                OpenAIService[openai.ts\nFunction calling wrapper]
             end
         end
     end
@@ -59,7 +59,7 @@ graph TB
 
     subgraph AI[AI Agent]
         GPT[OpenAI GPT-4o\nFunction calling]
-        ToolRunner[ToolRunner.js\nMaps AI calls to sync-safe tool execution]
+        ToolRunner[ToolRunner.ts\nMaps AI calls to sync-safe tool execution]
     end
 
     %% Data & Control Flow
