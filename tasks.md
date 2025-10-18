@@ -78,20 +78,16 @@ The following PRs have been completed successfully:
 ---
 
 ## PR #9 — Additional Shapes + Colors + Z-Index Testing
-**Goal:** Add circle, line, and text shape types with color picker and comprehensive z-index testing.
+**Goal:** Add ellipse and text shape types with color picker and comprehensive z-index testing.
 
-### Tasks
-1. **Circle shape implementation**
-   - Add `circle` type with `x, y, radius, fill` properties.
-   - Update `Shape.jsx` to render `<Circle>` components.
-   - Add circle creation tool to toolbar.
-2. **Line shape implementation**
-   - Add `line` type with `points` array property.
-   - Update `Shape.jsx` to render `<Line>` components.
-   - Add line drawing tool with click-drag interface.
-3. **Text shape implementation**
-   - Add `text` type with `text, fontSize, fontFamily, textAlign, fill` properties.
-   - Update `Shape.jsx` to render `<Text>` components.
+### Tasks  
+1. **Ellipse shape implementation**
+   - Add `ellipse` type with unified bounding box `x, y, width, height, fill` properties.
+   - Update `Shape.jsx` to render `<Ellipse>` components (radiusX=width/2, radiusY=height/2).
+   - Add ellipse creation tool to toolbar.
+2. **Text shape implementation**
+   - Add `text` type with `x, y, width, height, text, fontSize, fontFamily` properties.
+   - Update `Shape.jsx` to render `<Text>` components within container boxes.
    - Add text creation tool to toolbar.
 4. **Color Picker Integration**
    - Full color picker component with hex input
@@ -223,11 +219,11 @@ The following PRs have been completed successfully:
    - Input field with keyboard shortcut (Ctrl+K).
 5. **First AI tool: createShape**
    - `createShape(type, x, y, properties)` function.
-   - Support all shape types (rectangle, circle, line, text).
+   - Support all shape types (rectangle, ellipse, text).
    - Route through normal sync pipeline.
 6. **Testing**
    - **Unit Tests**: OpenAI wrapper, ToolRunner execution.
-   - **Manual Tests**: "Create a red circle at 100, 200"
+   - **Manual Tests**: "Create a red ellipse at 100, 200"
 7. Acceptance: AI can successfully create shapes that sync to all clients.
 
 ---
@@ -249,7 +245,7 @@ The following PRs have been completed successfully:
    - Handle complex multi-step operations.
 4. **Testing**
    - **Unit Tests**: New tool functions and validation.
-   - **Manual Tests**: "Move the red circle to 300, 400" and "Delete all blue shapes"
+   - **Manual Tests**: "Move the red ellipse to 300, 400" and "Delete all blue shapes"
 5. Acceptance: AI can modify, delete, and reason about existing canvas content.
 
 ---

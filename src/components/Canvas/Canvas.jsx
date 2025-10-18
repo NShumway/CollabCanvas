@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-import { Stage, Layer, Rect, Circle } from 'react-konva';
+import { Stage, Layer, Rect, Ellipse } from 'react-konva';
 import useCanvasStore from '@/store/canvasStore';
 import { useFirestoreSync } from '@/hooks/useFirestoreSync';
 import { useCursorSync } from '@/hooks/useCursorSync';
@@ -296,21 +296,15 @@ const Canvas = () => {
         }
       }
       
-      // C - Circle tool
+      // C - Ellipse tool
       if (e.key === 'c' || e.key === 'C') {
-        if (!createMode || createMode !== 'circle') {
+        if (!createMode || createMode !== 'ellipse') {
           e.preventDefault();
-          setCreateMode('circle');
+          setCreateMode('ellipse');
         }
       }
       
-      // L - Line tool
-      if (e.key === 'l' || e.key === 'L') {
-        if (!createMode || createMode !== 'line') {
-          e.preventDefault();
-          setCreateMode('line');
-        }
-      }
+      // L - Line tool (removed)
       
       // T - Text tool
       if (e.key === 't' || e.key === 'T') {
@@ -443,72 +437,45 @@ const Canvas = () => {
       let isInside = false;
       
       switch (shape.type) {
-        case 'rectangle':
-          isInside = worldX >= shape.x && 
-                    worldX <= shape.x + shape.width &&
-                    worldY >= shape.y && 
-                    worldY <= shape.y + shape.height;
+        case 'rectangle': {
+          // Use bounding box collision detection with fallbacks
+          const x = shape.x ?? 0;
+          const y = shape.y ?? 0;
+          const width = shape.width ?? SHAPE_DEFAULTS.RECTANGLE_WIDTH;
+          const height = shape.height ?? SHAPE_DEFAULTS.RECTANGLE_HEIGHT;
+          isInside = worldX >= x && 
+                    worldX <= x + width &&
+                    worldY >= y && 
+                    worldY <= y + height;
           break;
+        }
           
-        case 'circle':
-          const distance = Math.sqrt(
-            Math.pow(worldX - shape.x, 2) + Math.pow(worldY - shape.y, 2)
-          );
-          isInside = distance <= shape.radius;
+        case 'ellipse': {
+          // Use unified bounding box collision detection with fallbacks
+          const x = shape.x ?? 0;
+          const y = shape.y ?? 0;
+          const width = shape.width ?? SHAPE_DEFAULTS.ELLIPSE_WIDTH;
+          const height = shape.height ?? SHAPE_DEFAULTS.ELLIPSE_HEIGHT;
+          isInside = worldX >= x && 
+                    worldX <= x + width && 
+                    worldY >= y && 
+                    worldY <= y + height;
           break;
+        }
           
-        case 'text':
-          const textWidth = shape.width || SHAPE_DEFAULTS.TEXT_WIDTH;
-          const textHeight = shape.height || shape.fontSize * 1.2;
-          isInside = worldX >= shape.x && 
-                    worldX <= shape.x + textWidth &&
-                    worldY >= shape.y && 
-                    worldY <= shape.y + textHeight;
+        case 'text': {
+          const x = shape.x ?? 0;
+          const y = shape.y ?? 0;
+          const textWidth = shape.width ?? SHAPE_DEFAULTS.TEXT_WIDTH;
+          const textHeight = shape.height ?? (shape.fontSize ?? SHAPE_DEFAULTS.TEXT_FONT_SIZE) * 1.2;
+          isInside = worldX >= x && 
+                    worldX <= x + textWidth &&
+                    worldY >= y && 
+                    worldY <= y + textHeight;
           break;
+        }
           
-        case 'line':
-          // For lines, check if point is close to any line segment
-          const threshold = (shape.strokeWidth || SHAPE_DEFAULTS.LINE_STROKE_WIDTH) + SHAPE_DEFAULTS.HIT_TOLERANCE;
-          // Points are now relative to shape.x, shape.y: [0, 0, 100, 0]
-          for (let i = 0; i < shape.points.length - 2; i += 2) {
-            const x1 = shape.x + shape.points[i];     // ✅ Convert to world coordinates
-            const y1 = shape.y + shape.points[i + 1]; // ✅ Convert to world coordinates  
-            const x2 = shape.x + shape.points[i + 2]; // ✅ Convert to world coordinates
-            const y2 = shape.y + shape.points[i + 3]; // ✅ Convert to world coordinates
-            
-            // Distance from point to line segment
-            const A = worldX - x1;
-            const B = worldY - y1;
-            const C = x2 - x1;
-            const D = y2 - y1;
-            
-            const dot = A * C + B * D;
-            const lenSq = C * C + D * D;
-            let param = -1;
-            if (lenSq !== 0) param = dot / lenSq;
-            
-            let xx, yy;
-            if (param < 0) {
-              xx = x1;
-              yy = y1;
-            } else if (param > 1) {
-              xx = x2;
-              yy = y2;
-            } else {
-              xx = x1 + param * C;
-              yy = y1 + param * D;
-            }
-            
-            const dx = worldX - xx;
-            const dy = worldY - yy;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            
-            if (distance <= threshold) {
-              isInside = true;
-              break;
-            }
-          }
-          break;
+        // Removed: line collision detection (line shapes eliminated)
       }
       
       if (isInside) {
@@ -532,40 +499,45 @@ const Canvas = () => {
       let shapeLeft, shapeRight, shapeTop, shapeBottom;
       
       switch (shape.type) {
-        case 'rectangle':
-          shapeLeft = shape.x;
-          shapeRight = shape.x + shape.width;
-          shapeTop = shape.y;
-          shapeBottom = shape.y + shape.height;
+        case 'rectangle': {
+          // Use bounding box for selection with fallbacks
+          const x = shape.x ?? 0;
+          const y = shape.y ?? 0;
+          const width = shape.width ?? SHAPE_DEFAULTS.RECTANGLE_WIDTH;
+          const height = shape.height ?? SHAPE_DEFAULTS.RECTANGLE_HEIGHT;
+          shapeLeft = x;
+          shapeRight = x + width;
+          shapeTop = y;
+          shapeBottom = y + height;
           break;
+        }
           
-        case 'circle':
-          shapeLeft = shape.x - shape.radius;
-          shapeRight = shape.x + shape.radius;
-          shapeTop = shape.y - shape.radius;
-          shapeBottom = shape.y + shape.radius;
+        case 'ellipse': {
+          // Use unified bounding box for selection with fallbacks
+          const x = shape.x ?? 0;
+          const y = shape.y ?? 0;
+          const width = shape.width ?? SHAPE_DEFAULTS.ELLIPSE_WIDTH;
+          const height = shape.height ?? SHAPE_DEFAULTS.ELLIPSE_HEIGHT;
+          shapeLeft = x;
+          shapeRight = x + width;
+          shapeTop = y;
+          shapeBottom = y + height;
           break;
+        }
           
-        case 'text':
-          shapeLeft = shape.x;
-          shapeRight = shape.x + (shape.width || SHAPE_DEFAULTS.TEXT_WIDTH);
-          shapeTop = shape.y;
-          shapeBottom = shape.y + (shape.height || shape.fontSize * 1.2);
+        case 'text': {
+          const x = shape.x ?? 0;
+          const y = shape.y ?? 0;
+          const width = shape.width ?? SHAPE_DEFAULTS.TEXT_WIDTH;
+          const height = shape.height ?? (shape.fontSize ?? SHAPE_DEFAULTS.TEXT_FONT_SIZE) * 1.2;
+          shapeLeft = x;
+          shapeRight = x + width;
+          shapeTop = y;
+          shapeBottom = y + height;
           break;
+        }
           
-        case 'line':
-          // Extract x and y coordinates from relative points array
-          const xs = [];
-          const ys = [];
-          for (let i = 0; i < shape.points.length; i += 2) {
-            xs.push(shape.x + shape.points[i]);     // ✅ Convert to world coordinates
-            ys.push(shape.y + shape.points[i + 1]); // ✅ Convert to world coordinates
-          }
-          shapeLeft = Math.min(...xs);
-          shapeRight = Math.max(...xs);
-          shapeTop = Math.min(...ys);
-          shapeBottom = Math.max(...ys);
-          break;
+        // Removed: line selection bounds (line shapes eliminated)
           
         default:
           return; // Skip unknown shape types
@@ -763,11 +735,12 @@ const Canvas = () => {
     for (let x = visibleBounds.left; x <= visibleBounds.right; x += dotSpacing) {
       for (let y = visibleBounds.top; y <= visibleBounds.bottom; y += dotSpacing) {
         dots.push(
-          <Circle
+          <Ellipse
             key={`${x}-${y}`}
             x={x}
             y={y}
-            radius={dotSize}
+            radiusX={dotSize}
+            radiusY={dotSize}
             fill="#4A5568"
             opacity={0.4}
             listening={false} // Don't capture clicks on grid dots

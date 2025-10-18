@@ -16,7 +16,6 @@ export interface BaseShapeProperties {
   zIndex: number;
   
   // Metadata for collaboration and sync
-  readonly createdAt: number;
   readonly createdBy: string;
   updatedAt: number;
   updatedBy: string;
@@ -26,7 +25,7 @@ export interface BaseShapeProperties {
 }
 
 // Shape type discriminator
-export type ShapeType = 'rectangle' | 'circle' | 'line' | 'text';
+export type ShapeType = 'rectangle' | 'ellipse' | 'text';
 
 // Rectangle-specific properties
 export interface RectangleProperties extends BaseShapeProperties {
@@ -35,19 +34,14 @@ export interface RectangleProperties extends BaseShapeProperties {
   height: number;
 }
 
-// Circle-specific properties  
-export interface CircleProperties extends BaseShapeProperties {
-  readonly type: 'circle';
-  radius: number;
+// Ellipse-specific properties (uses unified bounding box)
+export interface EllipseProperties extends BaseShapeProperties {
+  readonly type: 'ellipse';
+  width: number;
+  height: number;
 }
 
-// Line-specific properties
-export interface LineProperties extends BaseShapeProperties {
-  readonly type: 'line';
-  points: readonly number[]; // Flattened array: [x1, y1, x2, y2, x3, y3, ...]
-  strokeWidth: number;
-  lineCap: 'butt' | 'round' | 'square';
-}
+// Removed: Line shapes eliminated for architectural simplicity
 
 // Text-specific properties
 export interface TextProperties extends BaseShapeProperties {
@@ -61,16 +55,16 @@ export interface TextProperties extends BaseShapeProperties {
 }
 
 // Union type for all possible shapes
-export type Shape = RectangleProperties | CircleProperties | LineProperties | TextProperties;
+export type Shape = RectangleProperties | EllipseProperties | TextProperties;
 
 // Shape collection type (used in store)
 export type ShapeCollection = Record<string, Shape>;
 
 // Partial shape updates (for modifications)
-export type ShapeUpdate = Partial<Omit<Shape, 'id' | 'type' | 'createdAt' | 'createdBy'>>;
+export type ShapeUpdate = Partial<Omit<Shape, 'id' | 'type' | 'createdBy'>>;
 
 // Shape creation data (before ID assignment) - now includes clientTimestamp
-export type ShapeCreationData = Omit<Shape, 'id' | 'createdAt' | 'updatedAt' | 'createdBy' | 'updatedBy'> & {
+export type ShapeCreationData = Omit<Shape, 'id' | 'updatedAt' | 'createdBy' | 'updatedBy'> & {
   clientTimestamp: number; // Required for new shapes
 };
 
@@ -110,7 +104,7 @@ export type ZIndexOperation = 'toFront' | 'toBack' | 'forward' | 'backward';
 
 // Shape validation helpers
 export const isValidShapeType = (type: unknown): type is ShapeType => {
-  return typeof type === 'string' && ['rectangle', 'circle', 'line', 'text'].includes(type);
+  return typeof type === 'string' && ['rectangle', 'ellipse', 'text'].includes(type);
 };
 
 export const isShape = (obj: unknown): obj is Shape => {
@@ -132,13 +126,11 @@ export const isRectangle = (shape: Shape): shape is RectangleProperties => {
   return shape.type === 'rectangle';
 };
 
-export const isCircle = (shape: Shape): shape is CircleProperties => {
-  return shape.type === 'circle';
+export const isEllipse = (shape: Shape): shape is EllipseProperties => {
+  return shape.type === 'ellipse';
 };
 
-export const isLine = (shape: Shape): shape is LineProperties => {
-  return shape.type === 'line';
-};
+// Removed: isLine type guard (line shapes eliminated)
 
 export const isText = (shape: Shape): shape is TextProperties => {
   return shape.type === 'text';
@@ -166,14 +158,14 @@ export const getShapeBounds = (shape: Shape): ShapeBounds => {
         height: shape.height,
       };
     }
-    case 'circle': {
+    case 'ellipse': {
       return {
-        left: shape.x - shape.radius,
-        top: shape.y - shape.radius,
-        right: shape.x + shape.radius,
-        bottom: shape.y + shape.radius,
-        width: shape.radius * 2,
-        height: shape.radius * 2,
+        left: shape.x,
+        top: shape.y,
+        right: shape.x + shape.width,
+        bottom: shape.y + shape.height,
+        width: shape.width,
+        height: shape.height,
       };
     }
     case 'text': {
@@ -188,27 +180,6 @@ export const getShapeBounds = (shape: Shape): ShapeBounds => {
         height,
       };
     }
-    case 'line': {
-      // Extract x and y coordinates from relative points array
-      const xs = [];
-      const ys = [];
-      for (let i = 0; i < shape.points.length; i += 2) {
-        if (shape.points[i] !== undefined) xs.push(shape.x + shape.points[i]!);     // ✅ Convert to world coordinates
-        if (shape.points[i + 1] !== undefined) ys.push(shape.y + shape.points[i + 1]!); // ✅ Convert to world coordinates
-      }
-      const minX = xs.length > 0 ? Math.min(...xs) : shape.x;
-      const maxX = xs.length > 0 ? Math.max(...xs) : shape.x;
-      const minY = ys.length > 0 ? Math.min(...ys) : shape.y;
-      const maxY = ys.length > 0 ? Math.max(...ys) : shape.y;
-      
-      return {
-        left: minX,
-        top: minY,
-        right: maxX,
-        bottom: maxY,
-        width: maxX - minX,
-        height: maxY - minY,
-      };
-    }
+    // Removed: line case (line shapes eliminated)
   }
 };

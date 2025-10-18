@@ -155,7 +155,7 @@ export interface KeyboardShortcut {
 export const KEYBOARD_SHORTCUTS: readonly KeyboardShortcut[] = [
   { key: 'v', action: 'select', description: 'Select tool' },
   { key: 'r', action: 'rectangle', description: 'Rectangle tool' },
-  { key: 'c', action: 'circle', description: 'Circle tool' },
+  { key: 'c', action: 'ellipse', description: 'Circle tool' },
   { key: 't', action: 'text', description: 'Text tool' },
   { key: 'l', action: 'line', description: 'Line tool' },
   { key: 'Escape', action: 'escape', description: 'Clear selection/mode' },

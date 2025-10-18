@@ -32,7 +32,7 @@ const useCanvasStore = create<CanvasStore>((set, get) => ({
   isLoading: false,
   
   // Create mode state
-  createMode: null, // null | 'rectangle' | 'circle' | 'text' etc.
+  createMode: null, // null | 'rectangle' | 'ellipse' | 'text' etc.
   
   // Shape actions
   setShapes: (shapes) => set({ 
@@ -180,7 +180,6 @@ const useCanvasStore = create<CanvasStore>((set, get) => ({
           y: originalShape.y + DUPLICATE_OFFSET,
           zIndex: (originalShape.zIndex || 0) + 1, // Place duplicates on top
           // ✅ Reset timestamps for new shape
-          createdAt: now,
           updatedAt: now,
           createdBy: state.currentUser?.uid || 'unknown',
           updatedBy: state.currentUser?.uid || 'unknown',

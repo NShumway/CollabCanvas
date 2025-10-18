@@ -22,13 +22,7 @@ export interface FirestoreShapeDocument {
   width?: number;
   height?: number;
   
-  // Circle-specific fields
-  radius?: number;
-  
-  // Line-specific fields
-  points?: readonly number[]; // Flattened array: [x1, y1, x2, y2, ...]
-  strokeWidth?: number;
-  lineCap?: 'butt' | 'round' | 'square';
+  // Removed: old shape-specific fields (radius, points, strokeWidth, lineCap)
   
   // Text-specific fields
   text?: string;
@@ -37,7 +31,6 @@ export interface FirestoreShapeDocument {
   textAlign?: 'left' | 'center' | 'right';
   
   // Firestore timestamps (server-generated)
-  createdAt: Timestamp;
   updatedAt: Timestamp;
   readonly createdBy: string;
   updatedBy: string;
@@ -160,10 +153,10 @@ export const convertToFirestoreShape = (shape: Shape): Partial<FirestoreShapeDoc
   const baseData: Partial<FirestoreShapeDocument> = {
     id: shape.id,
     type: shape.type,
-    x: shape.x,
-    y: shape.y,
-    fill: shape.fill,
-    zIndex: shape.zIndex,
+    x: shape.x ?? 0, // Fallback to origin if undefined
+    y: shape.y ?? 0, // Fallback to origin if undefined  
+    fill: shape.fill ?? SHAPE_DEFAULTS.FILL,
+    zIndex: shape.zIndex ?? SHAPE_DEFAULTS.Z_INDEX,
     updatedBy: shape.updatedBy,
     ...(shape.clientTimestamp !== undefined && { clientTimestamp: shape.clientTimestamp }),
   };
@@ -173,21 +166,16 @@ export const convertToFirestoreShape = (shape: Shape): Partial<FirestoreShapeDoc
     case 'rectangle':
       return {
         ...baseData,
-        width: shape.width,
-        height: shape.height,
+        width: shape.width ?? SHAPE_DEFAULTS.RECTANGLE_WIDTH,
+        height: shape.height ?? SHAPE_DEFAULTS.RECTANGLE_HEIGHT,
       };
-    case 'circle':
+    case 'ellipse':
       return {
         ...baseData,
-        radius: shape.radius,
+        width: shape.width ?? SHAPE_DEFAULTS.ELLIPSE_WIDTH,
+        height: shape.height ?? SHAPE_DEFAULTS.ELLIPSE_HEIGHT,
       };
-    case 'line':
-      return {
-        ...baseData,
-        points: shape.points,
-        strokeWidth: shape.strokeWidth,
-        lineCap: shape.lineCap,
-      };
+    // Removed: line case (line shapes eliminated)
     case 'text':
       return {
         ...baseData,
@@ -204,14 +192,13 @@ export const convertToFirestoreShape = (shape: Shape): Partial<FirestoreShapeDoc
 export const convertFromFirestoreShape = (doc: FirestoreShapeDocument): Shape => {
   const baseShape = {
     id: doc.id,
-    x: doc.x,
-    y: doc.y,
-    fill: doc.fill,
-    zIndex: doc.zIndex,
-    createdAt: convertFirestoreTimestamp(doc.createdAt),
+    x: doc.x ?? 0, // Fallback to origin if undefined
+    y: doc.y ?? 0, // Fallback to origin if undefined
+    fill: doc.fill ?? SHAPE_DEFAULTS.FILL,
+    zIndex: doc.zIndex ?? SHAPE_DEFAULTS.Z_INDEX,
     updatedAt: convertFirestoreTimestamp(doc.updatedAt),
-    createdBy: doc.createdBy,
-    updatedBy: doc.updatedBy,
+    createdBy: doc.createdBy ?? 'unknown',
+    updatedBy: doc.updatedBy ?? 'unknown',
     clientTimestamp: doc.clientTimestamp,
   };
 
@@ -223,30 +210,24 @@ export const convertFromFirestoreShape = (doc: FirestoreShapeDocument): Shape =>
         width: doc.width ?? SHAPE_DEFAULTS.RECTANGLE_WIDTH,
         height: doc.height ?? SHAPE_DEFAULTS.RECTANGLE_HEIGHT,
       } as Shape;
-    case 'circle':
+    case 'ellipse':
       return {
         ...baseShape,
-        type: 'circle',
-        radius: doc.radius ?? SHAPE_DEFAULTS.CIRCLE_RADIUS,
+        type: 'ellipse',
+        width: doc.width ?? SHAPE_DEFAULTS.ELLIPSE_WIDTH,
+        height: doc.height ?? SHAPE_DEFAULTS.ELLIPSE_HEIGHT,
       } as Shape;
-    case 'line':
-      return {
-        ...baseShape,
-        type: 'line',
-        points: doc.points ?? [0, 0, SHAPE_DEFAULTS.LINE_LENGTH, 0],
-        strokeWidth: doc.strokeWidth ?? SHAPE_DEFAULTS.LINE_STROKE_WIDTH,
-        lineCap: doc.lineCap ?? SHAPE_DEFAULTS.LINE_CAP,
-      } as Shape;
+    // Removed: line case (line shapes eliminated)
     case 'text':
       return {
         ...baseShape,
         type: 'text',
         text: doc.text ?? SHAPE_DEFAULTS.TEXT_CONTENT,
-        fontSize: doc.fontSize ?? SHAPE_DEFAULTS.TEXT_FONT_SIZE, // ✅ Now consistent!
+        fontSize: doc.fontSize ?? SHAPE_DEFAULTS.TEXT_FONT_SIZE,
         fontFamily: doc.fontFamily ?? SHAPE_DEFAULTS.TEXT_FONT_FAMILY,
         textAlign: doc.textAlign ?? SHAPE_DEFAULTS.TEXT_ALIGN,
-        width: doc.width,
-        height: doc.height,
+        width: doc.width ?? SHAPE_DEFAULTS.TEXT_WIDTH,
+        height: doc.height ?? SHAPE_DEFAULTS.TEXT_HEIGHT,
       } as Shape;
   }
 };
@@ -263,7 +244,6 @@ export const isValidFirestoreShape = (doc: unknown): doc is FirestoreShapeDocume
     typeof shape['y'] === 'number' &&
     typeof shape['fill'] === 'string' &&
     typeof shape['zIndex'] === 'number' &&
-    shape['createdAt'] instanceof Object &&
     shape['updatedAt'] instanceof Object
   );
 };

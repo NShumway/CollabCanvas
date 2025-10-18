@@ -66,39 +66,24 @@ const Toolbar = () => {
         </svg>
       </button>
       
-      {/* Circle Tool */}
+      {/* Ellipse Tool */}
       <button
-        onClick={() => handleToolClick('circle')}
+        onClick={() => handleToolClick('ellipse')}
         className={`
           flex items-center justify-center w-10 h-10 rounded-md transition-colors
-          ${createMode === 'circle' 
+          ${createMode === 'ellipse' 
             ? 'bg-blue-600 text-white' 
             : 'bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white'
           }
         `}
-        title="Circle (C)"
+        title="Ellipse (C)"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="12" cy="12" r="9"/>
+          <ellipse cx="12" cy="12" r="9"/>
         </svg>
       </button>
       
-      {/* Line Tool */}
-      <button
-        onClick={() => handleToolClick('line')}
-        className={`
-          flex items-center justify-center w-10 h-10 rounded-md transition-colors
-          ${createMode === 'line' 
-            ? 'bg-blue-600 text-white' 
-            : 'bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white'
-          }
-        `}
-        title="Line (L)"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <line x1="7" y1="17" x2="17" y2="7"/>
-        </svg>
-      </button>
+      {/* Line Tool - Removed (architectural simplification) */}
       
       {/* Text Tool */}
       <button
@@ -148,8 +133,8 @@ const Toolbar = () => {
         {createMode === null && selectedIds.length === 0 && '🖱️ Select and move objects'}
         {createMode === null && selectedIds.length > 0 && `✨ ${selectedIds.length} shape${selectedIds.length === 1 ? '' : 's'} selected`}
         {createMode === 'rectangle' && '📦 Click and drag to create rectangles'}
-        {createMode === 'circle' && '⭕ Click and drag to create circles'}
-        {createMode === 'line' && '📏 Click and drag to draw lines'}
+        {createMode === 'ellipse' && '⭕ Click and drag to create ellipses'}
+        {/* Line status removed */}
         {createMode === 'text' && '📝 Click to place text'}
       </div>
       

@@ -10,8 +10,8 @@ export type {
   BaseShapeProperties,
   ShapeType,
   RectangleProperties,
-  CircleProperties,
-  LineProperties,
+  EllipseProperties,
+  // Removed: LineProperties (line shapes eliminated)
   TextProperties,
   Shape,
   ShapeCollection,
@@ -30,8 +30,8 @@ export {
   isValidShapeType,
   isShape,
   isRectangle,
-  isCircle,
-  isLine,
+  isEllipse,
+  // Removed: isLine (line shapes eliminated)
   isText,
   getShapeBounds,
 } from './shapes';
@@ -189,7 +189,7 @@ export interface DevSettings {
 }
 
 // Constants for type validation
-export const SHAPE_TYPES = ['rectangle', 'circle', 'line', 'text'] as const;
+export const SHAPE_TYPES = ['rectangle', 'ellipse', 'line', 'text'] as const;
 export const CONNECTION_STATES = ['connected', 'disconnected', 'reconnecting'] as const;
 export const TOOLBAR_ACTIONS = [
   'duplicate',

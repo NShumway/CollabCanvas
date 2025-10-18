@@ -28,8 +28,7 @@ export const createShape = ({ type, x, y, userId, maxZIndex }: CreateShapeOption
     y,
     fill: SHAPE_DEFAULTS.FILL,
     zIndex: maxZIndex + 1,
-    createdAt: now,
-    updatedAt: now, 
+    updatedAt: now,
     createdBy: userId || 'unknown',
     updatedBy: userId || 'unknown',
     clientTimestamp: now,
@@ -43,19 +42,15 @@ export const createShape = ({ type, x, y, userId, maxZIndex }: CreateShapeOption
         ...SHAPE_CREATION_DEFAULTS.rectangle,
       } as Shape;
 
-    case 'circle':
+    case 'ellipse':
       return {
         ...baseShape,
-        type: 'circle',
-        ...SHAPE_CREATION_DEFAULTS.circle,
-      } as Shape;
+        type: 'ellipse',
+        width: SHAPE_DEFAULTS.ELLIPSE_WIDTH,
+        height: SHAPE_DEFAULTS.ELLIPSE_HEIGHT,
+      };
 
-    case 'line':
-      return {
-        ...baseShape,
-        type: 'line',
-        ...SHAPE_CREATION_DEFAULTS.line,
-      } as Shape;
+    // Removed: line case (line shapes eliminated)
 
     case 'text':
       return {

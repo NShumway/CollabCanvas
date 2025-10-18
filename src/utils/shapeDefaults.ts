@@ -13,13 +13,11 @@ export const SHAPE_DEFAULTS = {
   RECTANGLE_WIDTH: 100,
   RECTANGLE_HEIGHT: 100,
   
-  // Circle defaults  
-  CIRCLE_RADIUS: 50,
+  // Ellipse defaults  
+  ELLIPSE_WIDTH: 100,
+  ELLIPSE_HEIGHT: 100,
   
-  // Line defaults
-  LINE_LENGTH: 100,
-  LINE_STROKE_WIDTH: 2,
-  LINE_CAP: 'round' as const,
+  // Removed: line defaults (line shapes eliminated)
   
   // Text defaults
   TEXT_CONTENT: 'Text',
@@ -40,14 +38,11 @@ export const SHAPE_CREATION_DEFAULTS = {
     width: SHAPE_DEFAULTS.RECTANGLE_WIDTH,
     height: SHAPE_DEFAULTS.RECTANGLE_HEIGHT,
   },
-  circle: {
-    radius: SHAPE_DEFAULTS.CIRCLE_RADIUS,
+  ellipse: {
+    width: SHAPE_DEFAULTS.ELLIPSE_WIDTH,
+    height: SHAPE_DEFAULTS.ELLIPSE_HEIGHT,
   },
-  line: {
-    points: [0, 0, SHAPE_DEFAULTS.LINE_LENGTH, 0], // Horizontal line
-    strokeWidth: SHAPE_DEFAULTS.LINE_STROKE_WIDTH,
-    lineCap: SHAPE_DEFAULTS.LINE_CAP,
-  },
+  // Removed: line defaults (line shapes eliminated)
   text: {
     text: SHAPE_DEFAULTS.TEXT_CONTENT,
     fontSize: SHAPE_DEFAULTS.TEXT_FONT_SIZE,

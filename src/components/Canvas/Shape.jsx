@@ -1,5 +1,5 @@
 import React from 'react';
-import { Rect, Circle, Line, Text } from 'react-konva';
+import { Rect, Ellipse, Text } from 'react-konva';
 import useCanvasStore from '@/store/canvasStore';
 import { SHAPE_DEFAULTS } from '@/utils/shapeDefaults';
 
@@ -10,70 +10,78 @@ const Shape = React.memo(({ shape }) => {
   
   // Default shape styles (Figma-like) - consistent across all shapes
   const baseStyle = {
-    fill: shape.fill || SHAPE_DEFAULTS.FILL,
+    fill: shape.fill ?? SHAPE_DEFAULTS.FILL,
     stroke: isSelected ? SHAPE_DEFAULTS.SELECTION_COLOR : 'transparent',
     strokeWidth: isSelected ? SHAPE_DEFAULTS.SELECTION_STROKE_WIDTH : 0,
   };
   
   // Render based on shape type
   switch (shape.type) {
-    case 'rectangle':
+    case 'rectangle': {
+      // Ensure all properties are defined with fallbacks  
+      const x = shape.x ?? 0;
+      const y = shape.y ?? 0;
+      const width = shape.width ?? SHAPE_DEFAULTS.RECTANGLE_WIDTH;
+      const height = shape.height ?? SHAPE_DEFAULTS.RECTANGLE_HEIGHT;
+      
       return (
         <Rect
-          x={shape.x}
-          y={shape.y}
-          width={shape.width}
-          height={shape.height}
+          x={x}
+          y={y}
+          width={width}
+          height={height}
           {...baseStyle}
           listening={false} // Canvas handles all mouse interactions
         />
       );
+    }
       
-    case 'circle':
+    case 'ellipse': {
+      // Ensure all properties are defined with fallbacks
+      const x = shape.x ?? 0;
+      const y = shape.y ?? 0;
+      const width = shape.width ?? SHAPE_DEFAULTS.ELLIPSE_WIDTH;
+      const height = shape.height ?? SHAPE_DEFAULTS.ELLIPSE_HEIGHT;
+      
       return (
-        <Circle
-          x={shape.x}
-          y={shape.y}
-          radius={shape.radius}
+        <Ellipse
+          x={x + width / 2}
+          y={y + height / 2}
+          radiusX={width / 2}
+          radiusY={height / 2}
           {...baseStyle}
           listening={false}
         />
       );
+    }
       
-    case 'line':
-      return (
-        <Line
-          x={shape.x} // ✅ Line anchor point
-          y={shape.y} // ✅ Line anchor point
-          points={shape.points} // Now relative to x,y: [0, 0, 100, 0]
-          stroke={isSelected ? SHAPE_DEFAULTS.SELECTION_COLOR : shape.fill} // ✅ Consistent selection styling
-          strokeWidth={isSelected 
-            ? (shape.strokeWidth || SHAPE_DEFAULTS.LINE_STROKE_WIDTH) + SHAPE_DEFAULTS.SELECTION_STROKE_WIDTH 
-            : (shape.strokeWidth || SHAPE_DEFAULTS.LINE_STROKE_WIDTH)
-          }
-          lineCap={shape.lineCap || SHAPE_DEFAULTS.LINE_CAP}
-          fill={undefined} // Lines don't have fill
-          listening={false}
-        />
-      );
+    // Removed: line case (line shapes eliminated)
       
-    case 'text':
+    case 'text': {
+      // Ensure all text properties are defined with fallbacks
+      const x = shape.x ?? 0;
+      const y = shape.y ?? 0;
+      const width = shape.width ?? SHAPE_DEFAULTS.TEXT_WIDTH;
+      const height = shape.height ?? SHAPE_DEFAULTS.TEXT_HEIGHT;
+      const fill = shape.fill ?? SHAPE_DEFAULTS.FILL;
+      
       return (
         <Text
-          x={shape.x}
-          y={shape.y}
-          text={shape.text}
-          fontSize={shape.fontSize}
-          fontFamily={shape.fontFamily}
-          align={shape.textAlign}
-          width={shape.width}
-          height={shape.height}
-          fill={shape.fill}
+          x={x}
+          y={y}
+          text={shape.text ?? SHAPE_DEFAULTS.TEXT_CONTENT}
+          fontSize={shape.fontSize ?? SHAPE_DEFAULTS.TEXT_FONT_SIZE}
+          fontFamily={shape.fontFamily ?? SHAPE_DEFAULTS.TEXT_FONT_FAMILY}
+          align={shape.textAlign ?? SHAPE_DEFAULTS.TEXT_ALIGN}
+          width={width}
+          height={height}
+          fill={fill}
           stroke={isSelected ? SHAPE_DEFAULTS.SELECTION_COLOR : 'transparent'}
           strokeWidth={isSelected ? SHAPE_DEFAULTS.SELECTION_STROKE_WIDTH : 0}
           listening={false}
         />
       );
+    }
       
     default:
       return null;

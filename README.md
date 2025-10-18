@@ -284,13 +284,13 @@ canvases/{canvasId}/
 - ✅ **Enhanced interaction** - Space+drag panning, multi-shape operations
 
 ### 🚧 Phase 2: Additional Shapes (Next)
-- Circle, line, and text shape types
+- Ellipse and text shape types
 - Resize and rotation handles  
 - Color picker and styling options
 - Copy/paste operations
 
 ### 🔮 Phase 3: AI Agent (Future)
-- Natural language shape creation ("Create a red circle")
+- Natural language shape creation ("Create a red ellipse")
 - AI-powered layout assistance ("Arrange these in a grid")
 - Complex operation planning
 - Chat interface for commands
@@ -298,7 +298,7 @@ canvases/{canvasId}/
 ## ⚠️ Current Limitations
 
 ### Shape Types & Editing:
-- **Single shape type:** Only rectangles (circles, lines, text coming in next release)
+- **Single shape type:** Only rectangles (ellipse, text coming in next release)
 - **No resize/rotation:** Shapes are fixed size after creation
 - **No color editing:** Default colors only (color picker in development)
 

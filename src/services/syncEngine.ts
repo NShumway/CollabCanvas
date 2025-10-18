@@ -176,9 +176,8 @@ export class SyncEngine {
         const shapeData = {
           ...firestoreShape,
           updatedAt: serverTimestamp(),
-          // Only set createdAt for new shapes
-          ...(shape.createdAt ? {} : {
-            createdAt: serverTimestamp(),
+          // Set createdBy for new shapes
+          ...(shape.createdBy ? {} : {
             createdBy: this.currentUser?.uid || 'unknown'
           })
         };

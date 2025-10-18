@@ -99,7 +99,7 @@ export const useFirestoreSync = (): void => {
     }
     
     // CRITICAL: Convert Firestore document to proper Shape format
-    // This ensures types like line points are properly handled
+    // This ensures all shape properties are properly handled
     const convertedShape = convertFromFirestoreShape({
       ...remoteData,
       id: shapeId

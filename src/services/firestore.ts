@@ -34,7 +34,7 @@ const CANVAS_ID = 'default-canvas';
  * Shape Document Structure:
  * {
  *   id: string,
- *   type: 'rectangle' | 'circle' | 'text',
+ *   type: 'rectangle' | 'ellipse' | 'text',
  *   x: number,
  *   y: number, 
  *   width: number,
@@ -94,8 +94,7 @@ export const writeShape = async (shape: Partial<FirestoreShapeDocument>, userEma
       updatedAt: serverTimestamp(),
       updatedBy: userEmail,
       // Only set createdBy if it's a new shape
-      ...(shape.createdAt ? {} : { 
-        createdAt: serverTimestamp(),
+      ...(shape.createdBy ? {} : { 
         createdBy: userEmail 
       })
     };

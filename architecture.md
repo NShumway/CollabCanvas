@@ -50,7 +50,7 @@ graph TB
 
         subgraph DB[Firestore]
             CanvasCollection[canvases/{canvasId}]
-            ShapesCollection[shapes/{shapeId}\n(id, type, x, y, width, height, fill, rotation, zIndex, updatedAt, updatedBy)]
+            ShapesCollection[shapes/{shapeId}\n(id, type, x, y, width, height, fill, rotation?, fontSize?, text?, zIndex, updatedAt, updatedBy)]
             UsersCollection[users/{userId}\n(uid, displayName, cursorX, cursorY, color, online, lastSeen)]
             CommentsCollection[comments/{commentId}\n(text, author, x, y, replies, resolved, attachedToShape, createdAt)]
             MetadataDoc[metadata\n(createdAt, createdBy)]

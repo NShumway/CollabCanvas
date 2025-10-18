@@ -143,9 +143,9 @@ Add professional-grade usability features and performance optimization.
 
 **AI Command Categories**
 - **Creation:** Create shapes or text with specific properties  
-  > e.g. “Create a red circle at 100, 200”  
+  > e.g. "Create a red ellipse at 100, 200"  
 - **Manipulation:** Move, resize, rotate, recolor  
-  > e.g. “Move the red circle to the center”  
+  > e.g. "Move the red ellipse to the center"  
 - **Layout:** Arrange or distribute shapes  
   > e.g. “Arrange these in a row”, “Make a 3x3 grid”  
 - **Complex:** Multi-step UI patterns  
@@ -168,7 +168,7 @@ getCanvasState, getSelectedShapes
 ```js
 {
   name: "updateShape",
-  arguments: { id: "circle123", x: 400, y: 300 }
+  arguments: { id: "ellipse123", x: 400, y: 300 }
 }
 ```
 
@@ -262,7 +262,7 @@ getCanvasState, getSelectedShapes
 **Phase 2–4 Additions**
 ```js
 {
-  createMode: 'rectangle' | 'circle' | 'line' | 'text' | null,
+  createMode: 'rectangle' | 'ellipse' | 'text' | null,
   clipboard: { shapes: [], timestamp: number },
   transforming: { shapeId, mode: 'resize' | 'rotate' | null },
   editingTextId: null,
@@ -277,12 +277,27 @@ getCanvasState, getSelectedShapes
 }
 ```
 
+### Shape Architecture
+
+**Unified Bounding Box Model**
+All shapes use consistent `x, y, width, height` properties:
+- `x, y`: Top-left corner of bounding box (farthest left/up the shape extends)
+- `width, height`: Dimensions of axis-aligned bounding box
+- `rotation?`: Optional rotation transform applied within the bounding box
+
+**Shape Types:**
+- `rectangle`: Renders exactly within bounding box (when rotation=0)
+- `ellipse`: Renders as ellipse fit within bounding box (radiusX=width/2, radiusY=height/2)  
+- `text`: Renders text within container box (Figma-style text containers)
+
+**Benefits:** Consistent transforms, collision detection, and multi-select operations across all shape types.
+
 ### Firestore Collections
 
 ```
 /canvases/{canvasId}/
   shapes/{shapeId}
-    id, type, x, y, width, height, fill, rotation, fontSize, text, radius, points, zIndex
+    id, type, x, y, width, height, fill, rotation?, fontSize?, text?, zIndex
     updatedAt (ServerTimestamp), updatedBy
 
   users/{userId}

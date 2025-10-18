@@ -65,9 +65,7 @@ export const useConnectionState = (): UseConnectionStateReturn => {
           updatedAt: shapeData['updatedAt']?.seconds 
             ? shapeData['updatedAt'].seconds * 1000 
             : Date.now(),
-          createdAt: shapeData['createdAt']?.seconds 
-            ? shapeData['createdAt'].seconds * 1000 
-            : Date.now()
+          createdBy: shapeData['createdBy'] || 'unknown'
         } as Shape;
         firestoreShapes[doc.id] = shape;
       });
