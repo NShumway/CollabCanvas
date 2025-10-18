@@ -17,7 +17,8 @@ import { useEffect, useCallback } from 'react';
 import { listenToShapes } from '@/services/firestore';
 import useCanvasStore from '@/store/canvasStore';
 import { devLog } from '@/utils/devSettings';
-import type { FirestoreDocumentChange, FirebaseError, Shape } from '@/types';
+import { convertFromFirestoreShape } from '@/types/firebase';
+import type { FirestoreDocumentChange, FirebaseError } from '@/types';
 
 /**
  * Hook to sync shapes from Firestore (Read Path Only)
@@ -97,20 +98,17 @@ export const useFirestoreSync = (): void => {
       return;
     }
     
-    // Prepare shape data with converted timestamps
-    const shapeData: Partial<Shape> = {
+    // CRITICAL: Convert Firestore document to proper Shape format
+    // This ensures types like line points are properly handled
+    const convertedShape = convertFromFirestoreShape({
       ...remoteData,
-      id: shapeId,
-      updatedAt: remoteTimestamp,
-      createdAt: remoteData.createdAt?.seconds 
-        ? remoteData.createdAt.seconds * 1000 
-        : remoteTimestamp
-    };
+      id: shapeId
+    });
     
     if (isNewShape || !existingShape) {
-      addShape(shapeData as Shape);
+      addShape(convertedShape);
     } else {
-      updateShape(shapeId, shapeData);
+      updateShape(shapeId, convertedShape);
     }
   }, [addShape, updateShape]);
   

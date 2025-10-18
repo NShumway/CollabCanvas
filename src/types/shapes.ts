@@ -5,6 +5,8 @@
  * Ensures type safety across creation, manipulation, and synchronization.
  */
 
+import { SHAPE_DEFAULTS } from '@/utils/shapeDefaults';
+
 // Base properties common to all shapes
 export interface BaseShapeProperties {
   readonly id: string;
@@ -42,7 +44,7 @@ export interface CircleProperties extends BaseShapeProperties {
 // Line-specific properties
 export interface LineProperties extends BaseShapeProperties {
   readonly type: 'line';
-  points: readonly [number, number][];
+  points: readonly number[]; // Flattened array: [x1, y1, x2, y2, x3, y3, ...]
   strokeWidth: number;
   lineCap: 'butt' | 'round' | 'square';
 }
@@ -67,8 +69,10 @@ export type ShapeCollection = Record<string, Shape>;
 // Partial shape updates (for modifications)
 export type ShapeUpdate = Partial<Omit<Shape, 'id' | 'type' | 'createdAt' | 'createdBy'>>;
 
-// Shape creation data (before ID assignment)
-export type ShapeCreationData = Omit<Shape, 'id' | 'createdAt' | 'updatedAt' | 'createdBy' | 'updatedBy' | 'clientTimestamp'>;
+// Shape creation data (before ID assignment) - now includes clientTimestamp
+export type ShapeCreationData = Omit<Shape, 'id' | 'createdAt' | 'updatedAt' | 'createdBy' | 'updatedBy'> & {
+  clientTimestamp: number; // Required for new shapes
+};
 
 // Viewport state
 export interface Viewport {
@@ -173,7 +177,7 @@ export const getShapeBounds = (shape: Shape): ShapeBounds => {
       };
     }
     case 'text': {
-      const width = shape.width ?? 100; // Default width if not specified
+      const width = shape.width ?? SHAPE_DEFAULTS.TEXT_WIDTH;
       const height = shape.height ?? shape.fontSize * 1.2; // Approximate height based on font size
       return {
         left: shape.x,
@@ -185,12 +189,17 @@ export const getShapeBounds = (shape: Shape): ShapeBounds => {
       };
     }
     case 'line': {
-      const xs = shape.points.map(([x]) => x);
-      const ys = shape.points.map(([, y]) => y);
-      const minX = Math.min(...xs);
-      const maxX = Math.max(...xs);
-      const minY = Math.min(...ys);
-      const maxY = Math.max(...ys);
+      // Extract x and y coordinates from relative points array
+      const xs = [];
+      const ys = [];
+      for (let i = 0; i < shape.points.length; i += 2) {
+        if (shape.points[i] !== undefined) xs.push(shape.x + shape.points[i]!);     // ✅ Convert to world coordinates
+        if (shape.points[i + 1] !== undefined) ys.push(shape.y + shape.points[i + 1]!); // ✅ Convert to world coordinates
+      }
+      const minX = xs.length > 0 ? Math.min(...xs) : shape.x;
+      const maxX = xs.length > 0 ? Math.max(...xs) : shape.x;
+      const minY = ys.length > 0 ? Math.min(...ys) : shape.y;
+      const maxY = ys.length > 0 ? Math.max(...ys) : shape.y;
       
       return {
         left: minX,

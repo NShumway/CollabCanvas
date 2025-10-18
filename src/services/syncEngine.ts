@@ -15,6 +15,7 @@
 import { writeBatch, serverTimestamp, type WriteBatch } from 'firebase/firestore';
 import { db } from './firebase';
 import { getShapeRef } from './firestore';
+import { convertToFirestoreShape } from '@/types/firebase';
 import { devLog } from '@/utils/devSettings';
 import type { 
   Shape, 
@@ -169,8 +170,11 @@ export class SyncEngine {
       // Add all queued shapes to batch
       shapesToWrite.forEach(([shapeId, shape]) => {
         const shapeRef = getShapeRef(shapeId);
+        
+        // Use convertToFirestoreShape to properly handle undefined values
+        const firestoreShape = convertToFirestoreShape(shape);
         const shapeData = {
-          ...shape,
+          ...firestoreShape,
           updatedAt: serverTimestamp(),
           // Only set createdAt for new shapes
           ...(shape.createdAt ? {} : {

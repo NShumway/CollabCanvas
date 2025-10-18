@@ -7,6 +7,7 @@
 import type { Timestamp } from 'firebase/firestore';
 import type { Shape } from './shapes';
 import type { MultiplayerUser } from './auth';
+import { SHAPE_DEFAULTS } from '@/utils/shapeDefaults';
 
 // Firestore document data (how shapes are stored in Firestore)
 export interface FirestoreShapeDocument {
@@ -25,7 +26,7 @@ export interface FirestoreShapeDocument {
   radius?: number;
   
   // Line-specific fields
-  points?: readonly [number, number][];
+  points?: readonly number[]; // Flattened array: [x1, y1, x2, y2, ...]
   strokeWidth?: number;
   lineCap?: 'butt' | 'round' | 'square';
   
@@ -146,7 +147,12 @@ export interface SecurityContext {
 }
 
 // Type conversion utilities
-export const convertFirestoreTimestamp = (timestamp: Timestamp): number => {
+export const convertFirestoreTimestamp = (timestamp: Timestamp | undefined | null): number => {
+  if (!timestamp || typeof timestamp.seconds !== 'number') {
+    // Fallback to current time if timestamp is missing or invalid
+    console.warn('Missing or invalid Firestore timestamp, using current time as fallback');
+    return Date.now();
+  }
   return timestamp.seconds * 1000 + Math.floor(timestamp.nanoseconds / 1000000);
 };
 
@@ -214,31 +220,31 @@ export const convertFromFirestoreShape = (doc: FirestoreShapeDocument): Shape =>
       return {
         ...baseShape,
         type: 'rectangle',
-        width: doc.width ?? 100,
-        height: doc.height ?? 100,
+        width: doc.width ?? SHAPE_DEFAULTS.RECTANGLE_WIDTH,
+        height: doc.height ?? SHAPE_DEFAULTS.RECTANGLE_HEIGHT,
       } as Shape;
     case 'circle':
       return {
         ...baseShape,
         type: 'circle',
-        radius: doc.radius ?? 50,
+        radius: doc.radius ?? SHAPE_DEFAULTS.CIRCLE_RADIUS,
       } as Shape;
     case 'line':
       return {
         ...baseShape,
         type: 'line',
-        points: doc.points ?? [[0, 0], [100, 100]],
-        strokeWidth: doc.strokeWidth ?? 2,
-        lineCap: doc.lineCap ?? 'round',
+        points: doc.points ?? [0, 0, SHAPE_DEFAULTS.LINE_LENGTH, 0],
+        strokeWidth: doc.strokeWidth ?? SHAPE_DEFAULTS.LINE_STROKE_WIDTH,
+        lineCap: doc.lineCap ?? SHAPE_DEFAULTS.LINE_CAP,
       } as Shape;
     case 'text':
       return {
         ...baseShape,
         type: 'text',
-        text: doc.text ?? 'Text',
-        fontSize: doc.fontSize ?? 16,
-        fontFamily: doc.fontFamily ?? 'Arial',
-        textAlign: doc.textAlign ?? 'left',
+        text: doc.text ?? SHAPE_DEFAULTS.TEXT_CONTENT,
+        fontSize: doc.fontSize ?? SHAPE_DEFAULTS.TEXT_FONT_SIZE, // ✅ Now consistent!
+        fontFamily: doc.fontFamily ?? SHAPE_DEFAULTS.TEXT_FONT_FAMILY,
+        textAlign: doc.textAlign ?? SHAPE_DEFAULTS.TEXT_ALIGN,
         width: doc.width,
         height: doc.height,
       } as Shape;

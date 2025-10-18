@@ -4,6 +4,8 @@ import useCanvasStore from '@/store/canvasStore';
 import { useFirestoreSync } from '@/hooks/useFirestoreSync';
 import { useCursorSync } from '@/hooks/useCursorSync';
 import { createSyncEngine } from '@/services/syncEngine';
+import { createShape, calculateMaxZIndex } from '@/utils/shapeCreation';
+import { SHAPE_DEFAULTS } from '@/utils/shapeDefaults';
 import Shape from './Shape';
 import Cursor from './Cursor';
 // PerformanceMonitor moved to App.jsx behind dev flag
@@ -265,37 +267,18 @@ const Canvas = () => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
         if (selectedIds.length > 0) {
           e.preventDefault();
-          const duplicatedShapes = [];
+          // ✅ Use the store action instead of duplicating logic
+          duplicateSelectedShapes();
           
-          // Get current selected shapes and create duplicates
-          selectedIds.forEach(shapeId => {
-            const originalShape = shapes[shapeId];
-            if (originalShape) {
-              const DUPLICATE_OFFSET = 20;
-              const newId = crypto.randomUUID();
-              const duplicatedShape = {
-                ...originalShape,
-                id: newId,
-                x: originalShape.x + DUPLICATE_OFFSET,
-                y: originalShape.y + DUPLICATE_OFFSET,
-                zIndex: (originalShape.zIndex || 0) + 1,
-                updatedBy: currentUser?.uid || 'unknown',
-              };
-              duplicatedShapes.push(duplicatedShape);
-            }
-          });
-          
-          // Apply via SyncEngine for proper sync (handles both local state and server sync)
-          duplicatedShapes.forEach(shape => {
-            if (syncEngineRef.current) {
+          // ✅ Sync duplicated shapes via SyncEngine
+          const currentState = useCanvasStore.getState();
+          currentState.selectedIds.forEach(shapeId => {
+            const shape = currentState.shapes[shapeId];
+            if (shape && syncEngineRef.current) {
               syncEngineRef.current.applyLocalChange(shape.id, shape);
               syncEngineRef.current.queueWrite(shape.id, shape, true);
             }
           });
-          
-          // Update selection to the duplicated shapes
-          const duplicatedIds = duplicatedShapes.map(shape => shape.id);
-          setSelectedIds(duplicatedIds);
         }
       }
       
@@ -310,6 +293,30 @@ const Canvas = () => {
         if (!createMode || createMode !== 'rectangle') {
           e.preventDefault();
           setCreateMode('rectangle');
+        }
+      }
+      
+      // C - Circle tool
+      if (e.key === 'c' || e.key === 'C') {
+        if (!createMode || createMode !== 'circle') {
+          e.preventDefault();
+          setCreateMode('circle');
+        }
+      }
+      
+      // L - Line tool
+      if (e.key === 'l' || e.key === 'L') {
+        if (!createMode || createMode !== 'line') {
+          e.preventDefault();
+          setCreateMode('line');
+        }
+      }
+      
+      // T - Text tool
+      if (e.key === 't' || e.key === 'T') {
+        if (!createMode || createMode !== 'text') {
+          e.preventDefault();
+          setCreateMode('text');
         }
       }
       
@@ -329,8 +336,13 @@ const Canvas = () => {
             // Sync via SyncEngine
             const updatedShape = shapes[shapeId];
             if (updatedShape && syncEngineRef.current) {
-              syncEngineRef.current.applyLocalChange(shapeId, { zIndex: (updatedShape.zIndex || 0) + 1 });
-              syncEngineRef.current.queueWrite(shapeId, { ...updatedShape, zIndex: (updatedShape.zIndex || 0) + 1 }, true);
+              const updateData = { 
+                zIndex: (updatedShape.zIndex || 0) + 1,
+                updatedBy: currentUser?.uid || 'unknown',
+                clientTimestamp: Date.now()
+              };
+              syncEngineRef.current.applyLocalChange(shapeId, updateData);
+              syncEngineRef.current.queueWrite(shapeId, { ...updatedShape, ...updateData }, true);
             }
           });
         }
@@ -346,8 +358,13 @@ const Canvas = () => {
             // Sync via SyncEngine
             const updatedShape = shapes[shapeId];
             if (updatedShape && syncEngineRef.current) {
-              syncEngineRef.current.applyLocalChange(shapeId, { zIndex: (updatedShape.zIndex || 0) - 1 });
-              syncEngineRef.current.queueWrite(shapeId, { ...updatedShape, zIndex: (updatedShape.zIndex || 0) - 1 }, true);
+              const updateData = { 
+                zIndex: (updatedShape.zIndex || 0) - 1,
+                updatedBy: currentUser?.uid || 'unknown',
+                clientTimestamp: Date.now()
+              };
+              syncEngineRef.current.applyLocalChange(shapeId, updateData);
+              syncEngineRef.current.queueWrite(shapeId, { ...updatedShape, ...updateData }, true);
             }
           });
         }
@@ -423,11 +440,78 @@ const Canvas = () => {
     const sortedShapes = Object.values(shapes).sort((a, b) => (b.zIndex || 0) - (a.zIndex || 0));
     
     for (const shape of sortedShapes) {
-      // Check if point is within shape bounds
-      if (worldX >= shape.x && 
-          worldX <= shape.x + (shape.width || 0) &&
-          worldY >= shape.y && 
-          worldY <= shape.y + (shape.height || 0)) {
+      let isInside = false;
+      
+      switch (shape.type) {
+        case 'rectangle':
+          isInside = worldX >= shape.x && 
+                    worldX <= shape.x + shape.width &&
+                    worldY >= shape.y && 
+                    worldY <= shape.y + shape.height;
+          break;
+          
+        case 'circle':
+          const distance = Math.sqrt(
+            Math.pow(worldX - shape.x, 2) + Math.pow(worldY - shape.y, 2)
+          );
+          isInside = distance <= shape.radius;
+          break;
+          
+        case 'text':
+          const textWidth = shape.width || SHAPE_DEFAULTS.TEXT_WIDTH;
+          const textHeight = shape.height || shape.fontSize * 1.2;
+          isInside = worldX >= shape.x && 
+                    worldX <= shape.x + textWidth &&
+                    worldY >= shape.y && 
+                    worldY <= shape.y + textHeight;
+          break;
+          
+        case 'line':
+          // For lines, check if point is close to any line segment
+          const threshold = (shape.strokeWidth || SHAPE_DEFAULTS.LINE_STROKE_WIDTH) + SHAPE_DEFAULTS.HIT_TOLERANCE;
+          // Points are now relative to shape.x, shape.y: [0, 0, 100, 0]
+          for (let i = 0; i < shape.points.length - 2; i += 2) {
+            const x1 = shape.x + shape.points[i];     // ✅ Convert to world coordinates
+            const y1 = shape.y + shape.points[i + 1]; // ✅ Convert to world coordinates  
+            const x2 = shape.x + shape.points[i + 2]; // ✅ Convert to world coordinates
+            const y2 = shape.y + shape.points[i + 3]; // ✅ Convert to world coordinates
+            
+            // Distance from point to line segment
+            const A = worldX - x1;
+            const B = worldY - y1;
+            const C = x2 - x1;
+            const D = y2 - y1;
+            
+            const dot = A * C + B * D;
+            const lenSq = C * C + D * D;
+            let param = -1;
+            if (lenSq !== 0) param = dot / lenSq;
+            
+            let xx, yy;
+            if (param < 0) {
+              xx = x1;
+              yy = y1;
+            } else if (param > 1) {
+              xx = x2;
+              yy = y2;
+            } else {
+              xx = x1 + param * C;
+              yy = y1 + param * D;
+            }
+            
+            const dx = worldX - xx;
+            const dy = worldY - yy;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance <= threshold) {
+              isInside = true;
+              break;
+            }
+          }
+          break;
+      }
+      
+      if (isInside) {
         return shape;
       }
     }
@@ -439,17 +523,53 @@ const Canvas = () => {
   const getShapesInSelection = (selectionRect) => {
     const selectedShapeIds = [];
     
+    const selectionLeft = Math.min(selectionRect.x, selectionRect.x + selectionRect.width);
+    const selectionRight = Math.max(selectionRect.x, selectionRect.x + selectionRect.width);
+    const selectionTop = Math.min(selectionRect.y, selectionRect.y + selectionRect.height);
+    const selectionBottom = Math.max(selectionRect.y, selectionRect.y + selectionRect.height);
+    
     Object.values(shapes).forEach(shape => {
-      // Convert selection rect to world coordinates if needed
-      const shapeLeft = shape.x;
-      const shapeRight = shape.x + (shape.width || 0);
-      const shapeTop = shape.y;
-      const shapeBottom = shape.y + (shape.height || 0);
+      let shapeLeft, shapeRight, shapeTop, shapeBottom;
       
-      const selectionLeft = Math.min(selectionRect.x, selectionRect.x + selectionRect.width);
-      const selectionRight = Math.max(selectionRect.x, selectionRect.x + selectionRect.width);
-      const selectionTop = Math.min(selectionRect.y, selectionRect.y + selectionRect.height);
-      const selectionBottom = Math.max(selectionRect.y, selectionRect.y + selectionRect.height);
+      switch (shape.type) {
+        case 'rectangle':
+          shapeLeft = shape.x;
+          shapeRight = shape.x + shape.width;
+          shapeTop = shape.y;
+          shapeBottom = shape.y + shape.height;
+          break;
+          
+        case 'circle':
+          shapeLeft = shape.x - shape.radius;
+          shapeRight = shape.x + shape.radius;
+          shapeTop = shape.y - shape.radius;
+          shapeBottom = shape.y + shape.radius;
+          break;
+          
+        case 'text':
+          shapeLeft = shape.x;
+          shapeRight = shape.x + (shape.width || SHAPE_DEFAULTS.TEXT_WIDTH);
+          shapeTop = shape.y;
+          shapeBottom = shape.y + (shape.height || shape.fontSize * 1.2);
+          break;
+          
+        case 'line':
+          // Extract x and y coordinates from relative points array
+          const xs = [];
+          const ys = [];
+          for (let i = 0; i < shape.points.length; i += 2) {
+            xs.push(shape.x + shape.points[i]);     // ✅ Convert to world coordinates
+            ys.push(shape.y + shape.points[i + 1]); // ✅ Convert to world coordinates
+          }
+          shapeLeft = Math.min(...xs);
+          shapeRight = Math.max(...xs);
+          shapeTop = Math.min(...ys);
+          shapeBottom = Math.max(...ys);
+          break;
+          
+        default:
+          return; // Skip unknown shape types
+      }
       
       // Check if shape overlaps with selection rectangle
       if (shapeRight >= selectionLeft && 
@@ -530,28 +650,22 @@ const Canvas = () => {
     // === BACKGROUND CLICK: Handle shape creation, drag-to-select, or clear selection ===
     if (e.target === e.target.getStage()) {
       
-      if (createMode === 'rectangle') {
-        // Create new rectangle
-        const maxZIndex = Math.max(0, ...Object.values(shapes).map(s => s.zIndex || 0));
-        const newShape = {
-          id: crypto.randomUUID(),
-          type: 'rectangle',
+      if (createMode) {
+        // ✅ Unified shape creation - eliminates massive code duplication
+        const maxZIndex = calculateMaxZIndex(shapes);
+        const newShape = createShape({
+          type: createMode,
           x: worldPos.x,
           y: worldPos.y,
-          width: 100,
-          height: 100,
-          fill: '#E2E8F0',
-          zIndex: maxZIndex + 1,
-          createdBy: currentUser?.uid || 'unknown',
-          updatedBy: currentUser?.uid || 'unknown',
-        };
+          userId: currentUser?.uid || 'unknown',
+          maxZIndex,
+        });
         
         if (syncEngineRef.current) {
           syncEngineRef.current.applyLocalChange(newShape.id, newShape);
           syncEngineRef.current.queueWrite(newShape.id, newShape, true);
         }
         
-        // Clear selection after placing shape (consistent with background click behavior)
         clearSelection();
         
       } else {
@@ -693,7 +807,7 @@ const Canvas = () => {
         style={{ 
           cursor: isSpacePressed ? 'grab' : 
                   isDraggingShapes ? 'grabbing' :
-                  createMode === 'rectangle' ? 'crosshair' : 
+                  createMode ? 'crosshair' : 
                   isSelecting ? 'crosshair' : 'default'
         }}
       >

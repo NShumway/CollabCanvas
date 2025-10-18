@@ -68,8 +68,13 @@ const LayerPanel = () => {
     
     // Sync via SyncEngine
     try {
-      syncEngine.applyLocalChange(shapeId, { zIndex: newZIndex });
-      syncEngine.queueWrite(shapeId, { ...shape, zIndex: newZIndex }, true);
+      const updateData = { 
+        zIndex: newZIndex,
+        updatedBy: shape.updatedBy,
+        clientTimestamp: Date.now()
+      };
+      syncEngine.applyLocalChange(shapeId, updateData);
+      syncEngine.queueWrite(shapeId, { ...shape, ...updateData }, true);
     } catch (error) {
       console.warn('Failed to sync z-index change:', error);
     }

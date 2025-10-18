@@ -4,6 +4,7 @@ import {
   onSnapshot,
   setDoc,
   deleteDoc,
+  getDoc,
   serverTimestamp,
   type CollectionReference,
   type DocumentReference,
@@ -58,6 +59,20 @@ export const getShapesRef = (canvasId: string = CANVAS_ID): CollectionReference<
  */
 export const getUsersRef = (canvasId: string = CANVAS_ID): CollectionReference<DocumentData> => {
   return collection(db, 'canvases', canvasId, 'users');
+};
+
+/**
+ * Get reference to a specific user document for color palette storage
+ */
+export const getUserRef = (userId: string): DocumentReference<DocumentData> => {
+  return doc(db, 'users', userId);
+};
+
+/**
+ * Get reference to user's color palette document
+ */
+export const getUserPaletteRef = (userId: string): DocumentReference<DocumentData> => {
+  return doc(db, 'users', userId, 'preferences', 'palette');
 };
 
 /**
@@ -136,6 +151,67 @@ export const listenToShapes = (callback: ShapeChangeCallback, canvasId: string =
     (error) => {
       console.error('Error listening to shapes:', error);
       callback([], error);
+    }
+  );
+};
+
+/**
+ * Write user's saved color palette to Firestore
+ */
+export const writeUserPalette = async (userId: string, colors: string[]): Promise<boolean> => {
+  try {
+    const paletteRef = getUserPaletteRef(userId);
+    await setDoc(paletteRef, {
+      colors,
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+    return true;
+  } catch (error) {
+    console.error('Error writing user palette to Firestore:', error);
+    return false;
+  }
+};
+
+/**
+ * Read user's saved color palette from Firestore
+ */
+export const readUserPalette = async (userId: string): Promise<string[]> => {
+  try {
+    const paletteRef = getUserPaletteRef(userId);
+    const snapshot = await getDoc(paletteRef);
+    
+    if (snapshot.exists()) {
+      const data = snapshot.data();
+      return data?.['colors'] || [];
+    }
+    return [];
+  } catch (error) {
+    console.error('Error reading user palette from Firestore:', error);
+    return [];
+  }
+};
+
+/**
+ * Listen to user's saved color palette changes in real-time
+ */
+export const listenToUserPalette = (
+  userId: string, 
+  callback: (colors: string[]) => void
+): Unsubscribe => {
+  const paletteRef = getUserPaletteRef(userId);
+  
+  return onSnapshot(paletteRef,
+    (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        callback(data?.['colors'] || []);
+      } else {
+        callback([]);
+      }
+    },
+    (error) => {
+      console.error('Error listening to user palette:', error);
+      callback([]);
     }
   );
 };

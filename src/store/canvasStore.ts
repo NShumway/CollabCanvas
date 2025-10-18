@@ -172,13 +172,19 @@ const useCanvasStore = create<CanvasStore>((set, get) => ({
       const originalShape = state.shapes[id];
       if (originalShape) {
         const newId = crypto.randomUUID();
+        const now = Date.now();
         const duplicatedShape: Shape = {
           ...originalShape,
           id: newId,
           x: originalShape.x + DUPLICATE_OFFSET,
           y: originalShape.y + DUPLICATE_OFFSET,
           zIndex: (originalShape.zIndex || 0) + 1, // Place duplicates on top
+          // ✅ Reset timestamps for new shape
+          createdAt: now,
+          updatedAt: now,
+          createdBy: state.currentUser?.uid || 'unknown',
           updatedBy: state.currentUser?.uid || 'unknown',
+          clientTimestamp: now,
         } as Shape;
         newShapes[newId] = duplicatedShape;
         newSelectedIds.push(newId);
