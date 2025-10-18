@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
-import useCanvasStore from '../../store/canvasStore';
-import { getSyncEngine } from '../../services/syncEngine';
+import useCanvasStore from '@/store/canvasStore';
+import { getSyncEngine } from '@/services/syncEngine';
 
 const LayerPanel = () => {
   const [isOpen, setIsOpen] = useState(false);

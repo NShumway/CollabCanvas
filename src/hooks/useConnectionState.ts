@@ -14,23 +14,27 @@
  */
 
 import { useEffect, useCallback } from 'react';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
-import { db } from '../services/firebase';
-import { getShapesRef } from '../services/firestore';
-import useCanvasStore from '../store/canvasStore';
+import { getDocs, query, orderBy, type QuerySnapshot, type DocumentData } from 'firebase/firestore';
+import { getShapesRef } from '@/services/firestore';
+import useCanvasStore from '@/store/canvasStore';
 import { useAuth } from './useAuth';
+import { devLog } from '@/utils/devSettings';
+import type { ConnectionState, Shape, ShapeCollection } from '@/types';
 
-export const useConnectionState = () => {
+interface UseConnectionStateReturn {
+  connectionState: ConnectionState;
+  reconcileState: () => Promise<void>;
+}
+
+export const useConnectionState = (): UseConnectionStateReturn => {
   const { currentUser } = useAuth();
   const { 
     shapes,
-    setShapes,
     addShape,
     updateShape,
     removeShape,
     connectionState,
     setConnectionState,
-    lastSyncTimestamp,
     setLastSyncTimestamp,
     pendingWrites,
     removePendingWrite
@@ -40,7 +44,7 @@ export const useConnectionState = () => {
    * Reconcile local state with Firestore on reconnect
    * Handles "what did I miss while offline?" scenario
    */
-  const reconcileState = useCallback(async () => {
+  const reconcileState = useCallback(async (): Promise<void> => {
     if (!currentUser?.uid) return;
     
     try {
@@ -50,21 +54,22 @@ export const useConnectionState = () => {
       // Fetch current Firestore state
       const shapesRef = getShapesRef();
       const shapesQuery = query(shapesRef, orderBy('updatedAt', 'desc'));
-      const snapshot = await getDocs(shapesQuery);
+      const snapshot: QuerySnapshot<DocumentData> = await getDocs(shapesQuery);
       
-      const firestoreShapes = {};
+      const firestoreShapes: ShapeCollection = {};
       snapshot.docs.forEach(doc => {
         const shapeData = doc.data();
-        firestoreShapes[doc.id] = {
+        const shape: Shape = {
           ...shapeData,
           id: doc.id,
-          updatedAt: shapeData.updatedAt?.seconds 
-            ? shapeData.updatedAt.seconds * 1000 
+          updatedAt: shapeData['updatedAt']?.seconds 
+            ? shapeData['updatedAt'].seconds * 1000 
             : Date.now(),
-          createdAt: shapeData.createdAt?.seconds 
-            ? shapeData.createdAt.seconds * 1000 
+          createdAt: shapeData['createdAt']?.seconds 
+            ? shapeData['createdAt'].seconds * 1000 
             : Date.now()
-        };
+        } as Shape;
+        firestoreShapes[doc.id] = shape;
       });
       
       devLog.sync(`Reconciliation: Found ${Object.keys(firestoreShapes).length} shapes in Firestore`);
@@ -127,12 +132,12 @@ export const useConnectionState = () => {
     // Initial connection state
     setConnectionState(navigator.onLine ? 'connected' : 'disconnected');
     
-    const handleOnline = () => {
+    const handleOnline = (): void => {
       devLog.sync('Network reconnected - triggering state reconciliation');
-      reconcileState();
+      void reconcileState();
     };
     
-    const handleOffline = () => {
+    const handleOffline = (): void => {
       devLog.sync('Network disconnected');
       setConnectionState('disconnected');
     };

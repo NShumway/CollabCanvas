@@ -5,8 +5,8 @@
  * Updates in real-time based on cursor/presence activity.
  */
 
-import useCanvasStore from '../../store/canvasStore';
-import { useAuth } from '../../hooks/useAuth';
+import useCanvasStore from '@/store/canvasStore';
+import { useAuth } from '@/hooks/useAuth';
 
 const OnlineUsers = () => {
   const { currentUser } = useAuth();

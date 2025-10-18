@@ -10,21 +10,21 @@
  * - Only update Zustand for legitimate remote changes
  * - Use timestamp comparison for conflict resolution
  * 
- * The write path is handled separately in syncEngine.js
+ * The write path is handled separately in syncEngine.ts
  */
 
 import { useEffect, useCallback } from 'react';
-import { listenToShapes } from '../services/firestore';
-import useCanvasStore from '../store/canvasStore';
-import { devLog } from '../utils/devSettings';
+import { listenToShapes } from '@/services/firestore';
+import useCanvasStore from '@/store/canvasStore';
+import { devLog } from '@/utils/devSettings';
+import type { FirestoreDocumentChange, FirebaseError, Shape } from '@/types';
 
 /**
  * Hook to sync shapes from Firestore (Read Path Only)
  * Implements bulletproof echo prevention and conflict resolution
  */
-export const useFirestoreSync = () => {
+export const useFirestoreSync = (): void => {
   const { 
-    shapes,
     updateShape,
     addShape,
     removeShape,
@@ -36,7 +36,7 @@ export const useFirestoreSync = () => {
    * Handle remote shape changes from Firestore
    * Implements critical echo prevention and timestamp-based conflict resolution
    */
-  const handleRemoteChanges = useCallback((changes, error) => {
+  const handleRemoteChanges = useCallback((changes: FirestoreDocumentChange[], error?: FirebaseError) => {
     if (error) {
       devLog.error('Firestore sync error:', error);
       return;
@@ -78,7 +78,7 @@ export const useFirestoreSync = () => {
   /**
    * Handle individual shape updates with timestamp-based conflict resolution
    */
-  const handleShapeUpdate = useCallback((shapeId, remoteData, isNewShape) => {
+  const handleShapeUpdate = useCallback((shapeId: string, remoteData: any, isNewShape: boolean) => {
     // Access shapes directly from store to avoid dependency
     const currentShapes = useCanvasStore.getState().shapes;
     const existingShape = currentShapes[shapeId];
@@ -98,7 +98,7 @@ export const useFirestoreSync = () => {
     }
     
     // Prepare shape data with converted timestamps
-    const shapeData = {
+    const shapeData: Partial<Shape> = {
       ...remoteData,
       id: shapeId,
       updatedAt: remoteTimestamp,
@@ -108,7 +108,7 @@ export const useFirestoreSync = () => {
     };
     
     if (isNewShape || !existingShape) {
-      addShape(shapeData);
+      addShape(shapeData as Shape);
     } else {
       updateShape(shapeId, shapeData);
     }

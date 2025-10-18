@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import useCanvasStore from '../../store/canvasStore';
+import useCanvasStore from '@/store/canvasStore';
 
 const PerformanceMonitor = React.memo(() => {
   // Selective subscriptions to avoid performance monitor causing performance issues

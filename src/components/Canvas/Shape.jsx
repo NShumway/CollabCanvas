@@ -1,6 +1,6 @@
 import React from 'react';
 import { Rect } from 'react-konva';
-import useCanvasStore from '../../store/canvasStore';
+import useCanvasStore from '@/store/canvasStore';
 
 const Shape = React.memo(({ shape }) => {
   const selectedIdsSet = useCanvasStore(state => state.selectedIdsSet); // Only subscribe to selection

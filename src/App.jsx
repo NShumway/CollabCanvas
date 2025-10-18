@@ -1,13 +1,13 @@
-import './services/firebase'; // Initialize Firebase
+import '@/services/firebase'; // Initialize Firebase
 import AuthGuard from './components/Auth/AuthGuard';
 import Canvas from './components/Canvas/Canvas';
-import { devSettings } from './utils/devSettings';
+import { devSettings } from '@/utils/devSettings';
 import Toolbar from './components/UI/Toolbar';
 import OnlineUsers from './components/UI/OnlineUsers';
 import ConnectionStatus from './components/UI/ConnectionStatus';
 import LayerPanel from './components/UI/LayerPanel';
 import PerformanceMonitor from './components/UI/PerformanceMonitor';
-import { useConnectionState } from './hooks/useConnectionState';
+import { useConnectionState } from '@/hooks/useConnectionState';
 
 function App() {
   // Initialize connection state monitoring

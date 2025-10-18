@@ -1,6 +1,6 @@
 import { signOut } from 'firebase/auth';
-import { auth } from '../../services/firebase';
-import { useAuth } from '../../hooks/useAuth';
+import { auth } from '@/services/firebase';
+import { useAuth } from '@/hooks/useAuth';
 import LoginButton from './LoginButton';
 
 const AuthGuard = ({ children }) => {

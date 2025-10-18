@@ -13,29 +13,33 @@
  * - Separate from shape sync to avoid interference
  */
 
-import { useEffect, useCallback, useRef } from 'react';
-import { doc, setDoc, onSnapshot } from 'firebase/firestore';
-import { db } from '../services/firebase';
-import { getUsersRef } from '../services/firestore';
-import useCanvasStore from '../store/canvasStore';
+import { useEffect, useCallback } from 'react';
+import { doc, setDoc, onSnapshot, type DocumentReference, type Unsubscribe } from 'firebase/firestore';
+import { db } from '@/services/firebase';
+import { getUsersRef } from '@/services/firestore';
+import useCanvasStore from '@/store/canvasStore';
 import { useAuth } from './useAuth';
-import { generateUserColor } from '../utils/userColor';
-import { devLog } from '../utils/devSettings';
+import { generateUserColor } from '@/utils/userColor';
+import { devLog } from '@/utils/devSettings';
+import type { MultiplayerUser, UserCollection } from '@/types';
 
-export const useCursorSync = () => {
+interface UseCursorSyncReturn {
+  writeCursorPosition: (cursorX: number, cursorY: number) => Promise<void>;
+}
+
+export const useCursorSync = (): UseCursorSyncReturn => {
   const { currentUser } = useAuth();
-  const { users, setUsers, updateUser, removeUser } = useCanvasStore();
-  const writeTimeoutRef = useRef(null);
+  const { setUsers } = useCanvasStore();
   
   /**
    * Write cursor position to Firestore (non-blocking)
    * Called from Canvas component when cursor moves
    */
-  const writeCursorPosition = useCallback(async (cursorX, cursorY) => {
+  const writeCursorPosition = useCallback(async (cursorX: number, cursorY: number): Promise<void> => {
     if (!currentUser?.uid) return;
     
     try {
-      const userDocRef = doc(db, 'canvases', 'default-canvas', 'users', currentUser.uid);
+      const userDocRef: DocumentReference = doc(db, 'canvases', 'default-canvas', 'users', currentUser.uid);
       const userData = {
         uid: currentUser.uid,
         displayName: currentUser.displayName || currentUser.email?.split('@')[0] || 'Unknown',
@@ -70,9 +74,9 @@ export const useCursorSync = () => {
     
     const usersRef = getUsersRef();
     
-    const unsubscribe = onSnapshot(usersRef, 
+    const unsubscribe: Unsubscribe = onSnapshot(usersRef, 
       (snapshot) => {
-        const updatedUsers = {};
+        const updatedUsers: UserCollection = {};
         const now = Date.now();
         const ACTIVITY_TIMEOUT = 30 * 1000; // 30 seconds - same as OnlineUsers component
         
@@ -86,32 +90,34 @@ export const useCursorSync = () => {
           }
           
           // Filter out offline users
-          if (!userData.online) {
+          if (!userData['online']) {
             return;
           }
           
           // Filter out users with stale activity (inactive for >30s)
           // Handle Firestore Timestamp objects (same pattern as shape sync)
-          const lastSeenTime = userData.lastSeen?.seconds 
-            ? userData.lastSeen.seconds * 1000  // Firestore Timestamp
-            : userData.lastSeen instanceof Date 
-              ? userData.lastSeen.getTime()     // JavaScript Date
-              : new Date(userData.lastSeen).getTime(); // Date string
+          const lastSeenTime = userData['lastSeen']?.seconds 
+            ? userData['lastSeen'].seconds * 1000  // Firestore Timestamp
+            : userData['lastSeen'] instanceof Date 
+              ? userData['lastSeen'].getTime()     // JavaScript Date
+              : new Date(userData['lastSeen']).getTime(); // Date string
           
           if ((now - lastSeenTime) >= ACTIVITY_TIMEOUT) {
             return; // User has been inactive too long
           }
           
           // Add user to updated users map (active within last 30s)
-          updatedUsers[userId] = {
-            uid: userData.uid,
-            displayName: userData.displayName,
-            cursorX: userData.cursorX,
-            cursorY: userData.cursorY,
-            color: userData.color,
-            online: userData.online,
-            lastSeen: userData.lastSeen
+          const user: MultiplayerUser = {
+            uid: userData['uid'],
+            displayName: userData['displayName'],
+            cursorX: userData['cursorX'],
+            cursorY: userData['cursorY'],
+            color: userData['color'],
+            online: userData['online'],
+            lastSeen: userData['lastSeen']
           };
+          
+          updatedUsers[userId] = user;
         });
         
         // Update Zustand with all active cursor users
@@ -141,9 +147,9 @@ export const useCursorSync = () => {
   useEffect(() => {
     if (!currentUser?.uid) return;
     
-    const setupPresence = async () => {
+    const setupPresence = async (): Promise<void> => {
       try {
-        const userDocRef = doc(db, 'canvases', 'default-canvas', 'users', currentUser.uid);
+        const userDocRef: DocumentReference = doc(db, 'canvases', 'default-canvas', 'users', currentUser.uid);
         
         // Mark user as online now
         await setDoc(userDocRef, {
@@ -165,7 +171,7 @@ export const useCursorSync = () => {
     // Cleanup: manually mark offline on component unmount
     return () => {
       if (currentUser?.uid) {
-        const userDocRef = doc(db, 'canvases', 'default-canvas', 'users', currentUser.uid);
+        const userDocRef: DocumentReference = doc(db, 'canvases', 'default-canvas', 'users', currentUser.uid);
         setDoc(userDocRef, {
           online: false,
           lastSeen: new Date()

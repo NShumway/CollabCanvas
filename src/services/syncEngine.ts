@@ -12,49 +12,49 @@
  * The read path is handled separately in useFirestoreSync.js
  */
 
-import { writeBatch, serverTimestamp } from 'firebase/firestore';
+import { writeBatch, serverTimestamp, type WriteBatch } from 'firebase/firestore';
 import { db } from './firebase';
 import { getShapeRef } from './firestore';
-import { devLog } from '../utils/devSettings';
+import { devLog } from '@/utils/devSettings';
+import type { 
+  Shape, 
+  ShapeUpdate, 
+  BatchShapeUpdates,
+  CurrentUser 
+} from '@/types';
+
 
 // Debounce timing for different operations  
 const SHAPE_DRAG_DEBOUNCE = 100; // 100ms for shape dragging (as specified)
-const IMMEDIATE_FLUSH = 0;       // 0ms for create/delete operations
 
 /**
  * SyncEngine class manages the write path to Firestore
  * Separates local state updates from Firestore writes to prevent echo loops
  */
 export class SyncEngine {
-  constructor() {
-    // Write queue and timing management
-    this.writeQueue = new Map(); // shapeId -> shape data
-    this.writeTimeouts = new Map(); // shapeId -> timeoutId
-    this.batchTimeoutId = null;
-    
-    // Track current user for metadata
-    this.currentUser = null;
-    
-    // Store reference - will be set by caller
-    this.store = null;
-  }
+  private writeQueue = new Map<string, Shape>(); // shapeId -> shape data
+  private writeTimeouts = new Map<string, NodeJS.Timeout>(); // shapeId -> timeoutId
+  private batchTimeoutId: NodeJS.Timeout | null = null;
+  
+  // Track current user for metadata
+  private currentUser: CurrentUser | null = null;
+  
+  // Store reference - will be set by caller  
+  private store: any = null;
   
   /**
    * Initialize with store and user (called by component)
    */
-  initialize(store, currentUser) {
-    this.store = store;
+  initialize(storeGetter: () => any, currentUser: CurrentUser | null): void {
+    this.store = storeGetter;
     this.currentUser = currentUser;
   }
   
   /**
    * Apply local change immediately to Zustand store
    * This provides instant 60fps feedback to the user
-   * 
-   * @param {string} shapeId - ID of shape to update
-   * @param {object} updates - Shape property updates
    */
-  applyLocalChange(shapeId, updates) {
+  applyLocalChange(shapeId: string, updates: ShapeUpdate): void {
     if (!this.store) {
       console.error('SyncEngine not initialized with store');
       return;
@@ -62,50 +62,51 @@ export class SyncEngine {
     
     // Update local state immediately
     const timestamp = Date.now();
-    const enrichedUpdates = {
+    const enrichedUpdates: ShapeUpdate & { 
+      clientTimestamp: number;
+      updatedBy: string; 
+    } = {
       ...updates,
       clientTimestamp: timestamp,
       updatedBy: this.currentUser?.uid || 'unknown'
     };
     
     // Check if shape exists or if this is a new shape
-    const state = this.store.getState();
+    const state = this.store();
     const existingShape = state.shapes[shapeId];
     
     if (existingShape) {
       // Update existing shape
-      this.store.getState().updateShape(shapeId, enrichedUpdates);
+      state.updateShape(shapeId, enrichedUpdates);
     } else {
-      // Add new shape (for creation)
-      const newShape = {
+      // Add new shape (for creation) 
+      const newShape: Shape = {
         id: shapeId,
         ...enrichedUpdates
-      };
-      this.store.getState().addShape(newShape);
+      } as Shape; // Type assertion needed due to discriminated unions
+      state.addShape(newShape);
     }
     
     // Mark this shape as having a pending write (prevents echo loops)
-    this.store.getState().addPendingWrite(shapeId, timestamp);
+    this.store().addPendingWrite(shapeId, timestamp);
   }
 
   /**
    * Apply batch changes for performance (used during drag operations with many shapes)
-   * 
-   * @param {Array} batchUpdates - Array of {shapeId, updates} objects
    */
-  applyBatchChanges(batchUpdates) {
+  applyBatchChanges(batchUpdates: BatchShapeUpdates): void {
     if (!this.store || !batchUpdates.length) return;
     
-    const store = this.store.getState();
+    const state = this.store();
     
     // Apply all local changes and queue writes in one operation
     for (const { shapeId, updates } of batchUpdates) {
-      store.updateShape(shapeId, updates);
+      state.updateShape(shapeId, updates);
       
       // Queue write for Firestore (debounced) - DON'T mark as pending until actually writing
-      const shape = store.shapes[shapeId];
+      const shape = state.shapes[shapeId];
       if (shape) {
-        const updatedShape = { ...shape, ...updates };
+        const updatedShape: Shape = { ...shape, ...updates };
         this.queueWrite(shapeId, updatedShape, false);
       }
     }
@@ -114,15 +115,12 @@ export class SyncEngine {
   /**
    * Queue a shape for writing to Firestore
    * Can be immediate (create/delete) or debounced (drag operations)
-   * 
-   * @param {string} shapeId - ID of shape to write
-   * @param {object} shape - Complete shape data
-   * @param {boolean} immediate - Whether to flush immediately or debounce
    */
-  queueWrite(shapeId, shape, immediate = false) {
+  queueWrite(shapeId: string, shape: Shape, immediate: boolean = false): void {
     // Clear any existing timeout for this shape
-    if (this.writeTimeouts.has(shapeId)) {
-      clearTimeout(this.writeTimeouts.get(shapeId));
+    const existingTimeout = this.writeTimeouts.get(shapeId);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
       this.writeTimeouts.delete(shapeId);
     }
     
@@ -133,17 +131,15 @@ export class SyncEngine {
     });
     
     // Set up flush timing
-    const delay = immediate ? IMMEDIATE_FLUSH : SHAPE_DRAG_DEBOUNCE;
-    
     if (immediate) {
       // Flush immediately for create/delete operations
-      this.flushWrites();
+      void this.flushWrites();
     } else {
       // Debounce for drag operations
       const timeoutId = setTimeout(() => {
-        this.flushWrites();
+        void this.flushWrites();
         this.writeTimeouts.delete(shapeId);
-      }, delay);
+      }, SHAPE_DRAG_DEBOUNCE);
       
       this.writeTimeouts.set(shapeId, timeoutId);
     }
@@ -153,7 +149,7 @@ export class SyncEngine {
    * Flush all queued writes to Firestore using batch writes
    * Clears pending writes from Zustand after successful commit
    */
-  async flushWrites() {
+  async flushWrites(): Promise<void> {
     if (this.writeQueue.size === 0) return;
     if (!this.store) {
       devLog.error('SyncEngine not initialized with store');
@@ -162,12 +158,12 @@ export class SyncEngine {
     
     try {
       // Create batch write
-      const batch = writeBatch(db);
+      const batch: WriteBatch = writeBatch(db);
       const shapesToWrite = Array.from(this.writeQueue.entries());
       
       // Mark shapes as pending writes RIGHT BEFORE actual Firestore write
       shapesToWrite.forEach(([shapeId]) => {
-        this.store.getState().addPendingWrite(shapeId);
+        this.store!().addPendingWrite(shapeId);
       });
       
       // Add all queued shapes to batch
@@ -191,14 +187,14 @@ export class SyncEngine {
       
       // Clear pending writes from Zustand after successful commit
       shapesToWrite.forEach(([shapeId]) => {
-        this.store.getState().removePendingWrite(shapeId);
+        this.store!().removePendingWrite(shapeId);
       });
       
       // Clear write queue
       this.writeQueue.clear();
       
       // Update last sync timestamp
-      this.store.getState().setLastSyncTimestamp();
+      this.store().setLastSyncTimestamp();
       
       // Synced shapes to Firestore successfully
       
@@ -213,34 +209,33 @@ export class SyncEngine {
   /**
    * Delete a shape from Firestore
    * Removes from local state and queues deletion
-   * 
-   * @param {string} shapeId - ID of shape to delete
    */
-  deleteShape(shapeId) {
+  deleteShape(shapeId: string): void {
     if (!this.store) {
       console.error('SyncEngine not initialized with store');
       return;
     }
     
     // Remove from local state immediately
-    this.store.getState().removeShape(shapeId);
+    this.store().removeShape(shapeId);
     
     // Cancel any pending writes for this shape
-    if (this.writeTimeouts.has(shapeId)) {
-      clearTimeout(this.writeTimeouts.get(shapeId));
+    const existingTimeout = this.writeTimeouts.get(shapeId);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
       this.writeTimeouts.delete(shapeId);
     }
     this.writeQueue.delete(shapeId);
     
     // Queue deletion to Firestore
-    this.queueDeleteToFirestore(shapeId);
+    void this.queueDeleteToFirestore(shapeId);
   }
   
   /**
    * Queue shape deletion to Firestore
    * Private method used by deleteShape
    */
-  async queueDeleteToFirestore(shapeId) {
+  private async queueDeleteToFirestore(shapeId: string): Promise<void> {
     try {
       const shapeRef = getShapeRef(shapeId);
       const batch = writeBatch(db);
@@ -257,7 +252,7 @@ export class SyncEngine {
   /**
    * Clean up timeouts and queues on component unmount
    */
-  cleanup() {
+  cleanup(): void {
     // Clear all pending timeouts
     this.writeTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
     this.writeTimeouts.clear();
@@ -278,16 +273,16 @@ export class SyncEngine {
  * Create a singleton SyncEngine instance
  * Will be initialized with the store and user in the Canvas component
  */
-let syncEngineInstance = null;
+let syncEngineInstance: SyncEngine | null = null;
 
-export const createSyncEngine = () => {
+export const createSyncEngine = (): SyncEngine => {
   if (!syncEngineInstance) {
     syncEngineInstance = new SyncEngine();
   }
   return syncEngineInstance;
 };
 
-export const getSyncEngine = () => {
+export const getSyncEngine = (): SyncEngine => {
   if (!syncEngineInstance) {
     throw new Error('SyncEngine not created. Call createSyncEngine first.');
   }

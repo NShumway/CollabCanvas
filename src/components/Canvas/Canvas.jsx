@@ -1,9 +1,9 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { Stage, Layer, Rect, Circle } from 'react-konva';
-import useCanvasStore from '../../store/canvasStore';
-import { useFirestoreSync } from '../../hooks/useFirestoreSync';
-import { useCursorSync } from '../../hooks/useCursorSync';
-import { createSyncEngine } from '../../services/syncEngine';
+import useCanvasStore from '@/store/canvasStore';
+import { useFirestoreSync } from '@/hooks/useFirestoreSync';
+import { useCursorSync } from '@/hooks/useCursorSync';
+import { createSyncEngine } from '@/services/syncEngine';
 import Shape from './Shape';
 import Cursor from './Cursor';
 // PerformanceMonitor moved to App.jsx behind dev flag
@@ -64,7 +64,7 @@ const Canvas = () => {
   useEffect(() => {
     if (currentUser && !syncEngineRef.current) {
       syncEngineRef.current = createSyncEngine();
-      syncEngineRef.current.initialize(useCanvasStore, currentUser);
+      syncEngineRef.current.initialize(useCanvasStore.getState, currentUser);
     }
   }, [currentUser]);
   

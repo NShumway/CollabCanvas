@@ -1,6 +1,7 @@
 import { create } from 'zustand';
+import type { CanvasStore, Shape } from '@/types';
 
-const useCanvasStore = create((set, get) => ({
+const useCanvasStore = create<CanvasStore>((set, get) => ({
   // Canvas shapes
   shapes: {},
   shapeCount: 0, // Cached count for performance
@@ -39,7 +40,7 @@ const useCanvasStore = create((set, get) => ({
     shapeCount: Object.keys(shapes).length 
   }),
   
-  addShape: (shape) => set((state) => ({
+  addShape: (shape: Shape) => set((state) => ({
     shapes: {
       ...state.shapes,
       [shape.id]: shape,
@@ -47,25 +48,25 @@ const useCanvasStore = create((set, get) => ({
     shapeCount: state.shapeCount + 1,
   })),
   
-  updateShape: (id, updates) => set((state) => ({
+  updateShape: (id: string, updates) => set((state) => ({
     shapes: {
       ...state.shapes,
       [id]: {
-        ...state.shapes[id],
+        ...state.shapes[id]!,
         ...updates,
         // Don't override updatedAt here - let the sync system handle server timestamps
         // clientTimestamp is set by the calling code for local comparison
-      },
+      } as Shape,
     },
   })),
   
-  removeShape: (id) => set((state) => {
+  removeShape: (id: string) => set((state) => {
     const newShapes = { ...state.shapes };
     delete newShapes[id];
     
     // O(1) set-based removal instead of O(n) filter
-    const newSelectedIds = [];
-    const newSelectedIdsSet = new Set();
+    const newSelectedIds: string[] = [];
+    const newSelectedIdsSet = new Set<string>();
     
     for (const selectedId of state.selectedIds) {
       if (selectedId !== id) {
@@ -91,7 +92,7 @@ const useCanvasStore = create((set, get) => ({
     });
   },
   
-  addSelectedId: (id) => set((state) => {
+  addSelectedId: (id: string) => set((state) => {
     const newIds = [...state.selectedIds, id];
     return {
       selectedIds: newIds,
@@ -99,7 +100,7 @@ const useCanvasStore = create((set, get) => ({
     };
   }),
   
-  removeSelectedId: (id) => set((state) => {
+  removeSelectedId: (id: string) => set((state) => {
     const newIds = state.selectedIds.filter(selectedId => selectedId !== id);
     return {
       selectedIds: newIds,
@@ -113,7 +114,7 @@ const useCanvasStore = create((set, get) => ({
   }),
   
   // Multi-select helper actions
-  addToSelection: (id) => set((state) => {
+  addToSelection: (id: string) => set((state) => {
     // O(1) set operation instead of O(n) array recreation
     if (state.selectedIdsSet.has(id)) return state; // Already selected
     
@@ -127,7 +128,7 @@ const useCanvasStore = create((set, get) => ({
     };
   }),
   
-  removeFromSelection: (id) => set((state) => {
+  removeFromSelection: (id: string) => set((state) => {
     // O(1) set operation instead of O(n) array recreation
     if (!state.selectedIdsSet.has(id)) return state; // No change needed
     
@@ -158,26 +159,27 @@ const useCanvasStore = create((set, get) => ({
     return {
       shapes: newShapes,
       selectedIds: [], // Clear selection after delete
+      selectedIdsSet: new Set(),
     };
   }),
   
   duplicateSelectedShapes: () => set((state) => {
     const newShapes = { ...state.shapes };
-    const newSelectedIds = [];
+    const newSelectedIds: string[] = [];
     const DUPLICATE_OFFSET = 20; // px offset for duplicated shapes
     
     state.selectedIds.forEach(id => {
       const originalShape = state.shapes[id];
       if (originalShape) {
         const newId = crypto.randomUUID();
-        const duplicatedShape = {
+        const duplicatedShape: Shape = {
           ...originalShape,
           id: newId,
           x: originalShape.x + DUPLICATE_OFFSET,
           y: originalShape.y + DUPLICATE_OFFSET,
           zIndex: (originalShape.zIndex || 0) + 1, // Place duplicates on top
           updatedBy: state.currentUser?.uid || 'unknown',
-        };
+        } as Shape;
         newShapes[newId] = duplicatedShape;
         newSelectedIds.push(newId);
       }
@@ -186,11 +188,12 @@ const useCanvasStore = create((set, get) => ({
     return {
       shapes: newShapes,
       selectedIds: newSelectedIds, // Select the duplicated shapes
+      selectedIdsSet: new Set(newSelectedIds),
     };
   }),
   
   // Z-index management
-  bringToFront: (shapeId) => set((state) => {
+  bringToFront: (shapeId: string) => set((state) => {
     const shape = state.shapes[shapeId];
     if (!shape) return state;
     
@@ -207,7 +210,7 @@ const useCanvasStore = create((set, get) => ({
     };
   }),
   
-  sendToBack: (shapeId) => set((state) => {
+  sendToBack: (shapeId: string) => set((state) => {
     const shape = state.shapes[shapeId];
     if (!shape) return state;
     
@@ -224,7 +227,7 @@ const useCanvasStore = create((set, get) => ({
     };
   }),
   
-  bringForward: (shapeId) => set((state) => {
+  bringForward: (shapeId: string) => set((state) => {
     const shape = state.shapes[shapeId];
     if (!shape) return state;
     
@@ -240,7 +243,7 @@ const useCanvasStore = create((set, get) => ({
     };
   }),
   
-  sendBackward: (shapeId) => set((state) => {
+  sendBackward: (shapeId: string) => set((state) => {
     const shape = state.shapes[shapeId];
     if (!shape) return state;
     
@@ -268,24 +271,24 @@ const useCanvasStore = create((set, get) => ({
   
   setUsers: (users) => set({ users }),
   
-  updateUser: (uid, updates) => set((state) => ({
+  updateUser: (uid: string, updates) => set((state) => ({
     users: {
       ...state.users,
       [uid]: {
-        ...state.users[uid],
+        ...state.users[uid]!,
         ...updates,
       },
     },
   })),
   
-  removeUser: (uid) => set((state) => {
+  removeUser: (uid: string) => set((state) => {
     const newUsers = { ...state.users };
     delete newUsers[uid];
     return { users: newUsers };
   }),
   
   // Loading actions
-  setLoading: (isLoading) => set({ isLoading }),
+  setLoading: (isLoading: boolean) => set({ isLoading }),
   
   // Create mode actions
   setCreateMode: (mode) => set({ createMode: mode }),
@@ -293,14 +296,14 @@ const useCanvasStore = create((set, get) => ({
   clearCreateMode: () => set({ createMode: null }),
   
   // Tier 2: Sync tracking actions - manage pending writes to prevent echo loops
-  addPendingWrite: (shapeId, timestamp = Date.now()) => set((state) => ({
+  addPendingWrite: (shapeId: string, timestamp: number = Date.now()) => set((state) => ({
     pendingWrites: {
       ...state.pendingWrites,
       [shapeId]: timestamp,
     },
   })),
   
-  removePendingWrite: (shapeId) => set((state) => {
+  removePendingWrite: (shapeId: string) => set((state) => {
     const newPendingWrites = { ...state.pendingWrites };
     delete newPendingWrites[shapeId];
     return { pendingWrites: newPendingWrites };
@@ -309,7 +312,7 @@ const useCanvasStore = create((set, get) => ({
   clearPendingWrites: () => set({ pendingWrites: {} }),
   
   // Check if a shape has a pending write (used for echo prevention)
-  hasPendingWrite: (shapeId) => {
+  hasPendingWrite: (shapeId: string): boolean => {
     const state = get();
     return shapeId in state.pendingWrites;
   },
@@ -317,7 +320,7 @@ const useCanvasStore = create((set, get) => ({
   // Tier 3: Connection state actions - manage network and sync status
   setConnectionState: (connectionState) => set({ connectionState }),
   
-  setLastSyncTimestamp: (timestamp = Date.now()) => set({ lastSyncTimestamp: timestamp }),
+  setLastSyncTimestamp: (timestamp: number = Date.now()) => set({ lastSyncTimestamp: timestamp }),
 }));
 
 export default useCanvasStore;

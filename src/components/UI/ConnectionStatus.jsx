@@ -5,7 +5,7 @@
  * Displays last sync timestamp when disconnected.
  */
 
-import useCanvasStore from '../../store/canvasStore';
+import useCanvasStore from '@/store/canvasStore';
 
 const ConnectionStatus = () => {
   const { connectionState, lastSyncTimestamp } = useCanvasStore();
