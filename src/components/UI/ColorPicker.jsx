@@ -39,7 +39,7 @@ const ColorPicker = ({ isOpen, onClose, position = { x: 0, y: 0 } }) => {
     if (saved) {
       try {
         setRecentColors(JSON.parse(saved));
-      } catch (e) {
+      } catch {
         setRecentColors([]);
       }
     }

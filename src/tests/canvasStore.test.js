@@ -163,14 +163,12 @@ describe('Canvas Store - Multi-Select & Operations', () => {
     });
 
     it('should bring shape forward', () => {
-      const originalZIndex = store.getState().shapes.shape2.zIndex;
       store.getState().bringForward('shape2');
       
       expect(store.getState().shapes.shape2.zIndex).toBe(2.5); // Fractional insertion between 2 and 3
     });
 
     it('should send shape backward', () => {
-      const originalZIndex = store.getState().shapes.shape2.zIndex;
       store.getState().sendBackward('shape2');
       
       expect(store.getState().shapes.shape2.zIndex).toBe(1.5); // Fractional insertion between 1 and 2
