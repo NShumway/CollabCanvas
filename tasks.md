@@ -8,6 +8,14 @@
 - AI tool actions must go through `ToolRunner.execute(toolName, args)` which then calls `SyncEngine.applyLocalChange()` and `SyncEngine.queueWrite()`.
 - Tests must be done locally with **2 browser windows** for collaborative tests.
 
+**🔥 LEVERAGE BUILT-IN FEATURES FIRST** (Updated by native feature review)
+- **Konva Native Methods**: Use `node.moveToTop()`, `node.moveUp()`, `node.getClientRect()`, `node.absolutePosition()` instead of manual calculations
+- **Konva Transformer**: Already properly implemented - continue leveraging all built-in transform features
+- **Firebase Real-time**: Already using `onSnapshot()` and `serverTimestamp()` correctly - maintain this pattern
+- **Browser APIs**: Consider `navigator.clipboard` for copy/paste (requires HTTPS) with internal fallback
+- **Firebase Vertex AI**: Evaluate for AI integration instead of direct OpenAI API calls
+- **Selection Rectangle**: Current manual implementation is appropriate (no Konva built-in equivalent)
+
 ---
 
 ## ✅ COMPLETED: MVP Foundation (PRs 1-7)
@@ -39,9 +47,9 @@ The following PRs have been completed successfully:
 3. Duplicate
    - Ctrl+D duplicates selected shapes with offset, new IDs, and syncs them.
    - Multi-duplicate support maintaining relative positions.
-4. Z-index management
+4. Z-index management (**USE KONVA BUILT-INS**)
    - Add `zIndex` field to shape schema in Firestore.
-   - Implement bring forward/back functions.
+   - **⚠️ LEVERAGE NATIVE**: Use Konva's built-in `node.moveToTop()`, `node.moveUp()`, `node.moveToBottom()`, `node.moveDown()` methods instead of complex fractional z-index calculations.
    - Add `LayerPanel` component for visual layer reordering.
    - Keyboard shortcuts (Ctrl+], Ctrl+[).
    - **⚠️ Note**: Full z-index testing with visual verification will be completed in PR #9 with color features
@@ -179,12 +187,14 @@ The following PRs have been completed successfully:
 **Goal:** Add align and distribute tools for selected shapes.
 
 ### Tasks
-1. **Alignment functions**
+1. **Alignment functions** (**USE KONVA BUILT-INS**)
    - Implement `alignShapes(shapeIds, alignment)` helper.
+   - **⚠️ LEVERAGE NATIVE**: Use Konva's `node.getClientRect()` and `node.absolutePosition()` methods for precise bounds calculation and positioning.
    - Support: left, center, right, top, middle, bottom alignment.
    - Work with multi-selected shapes.
-2. **Distribution functions**
+2. **Distribution functions** (**USE KONVA BUILT-INS**)
    - Implement `distributeShapes(shapeIds, direction)` helper.
+   - **⚠️ LEVERAGE NATIVE**: Use Konva's positioning methods and bounds calculation for accurate distribution.
    - Support horizontal and vertical distribution.
 3. **Toolbar integration**
    - Alignment button group in toolbar.
@@ -199,8 +209,10 @@ The following PRs have been completed successfully:
 **Goal:** Implement internal clipboard and comprehensive keyboard shortcuts.
 
 ### Tasks
-1. **Internal clipboard system**
-   - Copy selected shapes to clipboard store slice.
+1. **Clipboard system** (**CONSIDER NATIVE CLIPBOARD API**)
+   - **⚠️ EVALUATE**: Consider using browser's native `navigator.clipboard.writeText()` and `navigator.clipboard.readText()` API for better user experience (requires HTTPS).
+   - **FALLBACK**: Keep internal clipboard store slice as fallback for browsers without clipboard permissions.
+   - Copy selected shapes to clipboard (JSON serialization).
    - Paste with offset positioning.
    - Preserve relative positions in multi-shape copies.
 2. **Keyboard shortcuts**
@@ -226,7 +238,8 @@ The following PRs have been completed successfully:
 **Goal:** Integrate OpenAI GPT-4o with basic infrastructure and 1 core tool.
 
 ### Tasks
-1. **OpenAI integration**
+1. **OpenAI integration** (**CONSIDER FIREBASE VERTEX AI**)
+   - **⚠️ EVALUATE**: Consider using Firebase's new Vertex AI integration instead of direct OpenAI API for better Firebase ecosystem integration.
    - `src/services/openai.js` - Function calling wrapper.
    - API key management and error handling.
    - Response parsing and validation.
@@ -307,8 +320,10 @@ The following PRs have been completed successfully:
 **Goal:** Add comment pins on canvas with threaded replies and real-time sync.
 
 ### Tasks
-1. **Comment data structure**
+1. **Comment data structure** (**LEVERAGE FIRESTORE NATIVE FEATURES**)
    - Firestore `comments/{commentId}` collection.
+   - **⚠️ LEVERAGE NATIVE**: Use Firestore's built-in `onSnapshot()` listeners for real-time updates instead of polling.
+   - **⚠️ LEVERAGE NATIVE**: Use Firestore's `serverTimestamp()` for consistent ordering across clients.
    - Schema: `text, author, x, y, replies, resolved, createdAt`.
    - Optional `attachedToShape` field for shape-specific comments.
 2. **Comment UI components**
@@ -316,8 +331,8 @@ The following PRs have been completed successfully:
    - Canvas comment pins with visual indicators.
    - Comment thread panel with replies.
    - Resolve/unresolve functionality.
-3. **Real-time comment sync**
-   - Comment creation and updates sync immediately.
+3. **Real-time comment sync** (**ALREADY USING FIRESTORE OPTIMALLY**)
+   - Comment creation and updates sync immediately via existing Firestore listeners.
    - Reply threads update in real-time.
    - Show/hide resolved comments toggle.
 4. **Testing**
