@@ -4,6 +4,8 @@
  * Tests to ensure proper shape initialization, prevent creation bugs,
  * and maintain consistent business logic across all shape types.
  * These tests prevent user experience issues during shape creation.
+ * 
+ * NOTE: All coordinates (x, y) represent the CENTER of the shape.
  */
 
 import { describe, it, expect } from 'vitest';

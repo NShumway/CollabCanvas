@@ -10,10 +10,11 @@ import { SHAPE_DEFAULTS } from '@/utils/shapeDefaults';
 // Base properties common to all shapes
 export interface BaseShapeProperties {
   readonly id: string;
-  x: number;
-  y: number;
+  x: number; // Center X coordinate
+  y: number; // Center Y coordinate
   fill: string;
   zIndex: number;
+  rotation?: number; // Rotation angle in radians (optional, defaults to 0)
   
   // Metadata for collaboration and sync
   readonly createdBy: string;
@@ -155,44 +156,47 @@ export interface ShapeBounds {
 export const getShapeBounds = (shape: Shape): ShapeBounds => {
   switch (shape.type) {
     case 'rectangle': {
-      const x = shape.x ?? 0;
-      const y = shape.y ?? 0;
+      // Shape coordinates are center-based
+      const centerX = shape.x ?? 0;
+      const centerY = shape.y ?? 0;
       const width = shape.width ?? SHAPE_DEFAULTS.RECTANGLE_WIDTH;
       const height = shape.height ?? SHAPE_DEFAULTS.RECTANGLE_HEIGHT;
       return {
-        left: x,
-        top: y,
-        right: x + width,
-        bottom: y + height,
+        left: centerX - width / 2,
+        top: centerY - height / 2,
+        right: centerX + width / 2,
+        bottom: centerY + height / 2,
         width,
         height,
       };
     }
     case 'ellipse': {
-      const x = shape.x ?? 0;
-      const y = shape.y ?? 0;
+      // Shape coordinates are center-based
+      const centerX = shape.x ?? 0;
+      const centerY = shape.y ?? 0;
       const width = shape.width ?? SHAPE_DEFAULTS.ELLIPSE_WIDTH;
       const height = shape.height ?? SHAPE_DEFAULTS.ELLIPSE_HEIGHT;
       return {
-        left: x,
-        top: y,
-        right: x + width,
-        bottom: y + height,
+        left: centerX - width / 2,
+        top: centerY - height / 2,
+        right: centerX + width / 2,
+        bottom: centerY + height / 2,
         width,
         height,
       };
     }
     case 'text': {
-      const x = shape.x ?? 0;
-      const y = shape.y ?? 0;
+      // Shape coordinates are center-based
+      const centerX = shape.x ?? 0;
+      const centerY = shape.y ?? 0;
       const width = shape.width ?? SHAPE_DEFAULTS.TEXT_WIDTH;
       const fontSize = shape.fontSize ?? SHAPE_DEFAULTS.TEXT_FONT_SIZE;
       const height = shape.height ?? fontSize * 1.2; // Approximate height based on font size
       return {
-        left: x,
-        top: y,
-        right: x + width,
-        bottom: y + height,
+        left: centerX - width / 2,
+        top: centerY - height / 2,
+        right: centerX + width / 2,
+        bottom: centerY + height / 2,
         width,
         height,
       };

@@ -1,14 +1,42 @@
-import React from 'react';
-import { Rect, Ellipse, Text } from 'react-konva';
+import React, { useRef, useEffect } from 'react';
+import { Rect, Ellipse, Text, Group } from 'react-konva';
 import useCanvasStore from '@/store/canvasStore';
 import { SHAPE_DEFAULTS } from '@/utils/shapeDefaults';
 
-const Shape = React.memo(({ shape }) => {
+const Shape = React.memo(({ shape, onShapeRef, onDragEnd }) => {
+  const shapeRef = useRef();
   const selectedIdsSet = useCanvasStore(state => state.selectedIdsSet); // Only subscribe to selection
   const selectionColor = useCanvasStore(state => state.selectionColor); // Dynamic selection color
   const editingTextId = useCanvasStore(state => state.editingTextId); // Subscribe to text editing state
   
   const isSelected = selectedIdsSet.has(shape.id); // O(1) instead of O(n)
+  
+  // Prevent event bubbling to stage - shape handles its own drag
+  const handleDragStart = (e) => {
+    e.cancelBubble = true; // Prevent stage from receiving this drag event
+  };
+
+  // Update React state during drag to keep Konva and React in sync
+  const handleDragMove = (e) => {
+    e.cancelBubble = true; // Prevent stage from receiving this drag event
+    const node = e.target;
+    if (onDragEnd) {
+      // Update React state immediately during drag
+      onDragEnd(shape.id, node.x(), node.y());
+    }
+  };
+
+  // Prevent event bubbling to stage - shape handles its own drag
+  const handleDragEndCallback = (e) => {
+    e.cancelBubble = true; // Prevent stage from receiving this drag event
+  };
+  
+  // Pass ref back to parent for transformer attachment
+  useEffect(() => {
+    if (shapeRef.current && onShapeRef) {
+      onShapeRef(shape.id, shapeRef.current);
+    }
+  }, [shape.id, onShapeRef]);
   
   // Default shape styles (Figma-like) - consistent across all shapes
   // Uses dynamic selection color that adapts to avoid conflicts with shape colors
@@ -21,39 +49,53 @@ const Shape = React.memo(({ shape }) => {
   // Render based on shape type
   switch (shape.type) {
     case 'rectangle': {
-      // Ensure all properties are defined with fallbacks  
-      const x = shape.x ?? 0;
-      const y = shape.y ?? 0;
+      // Store has center coordinates, Konva needs center for proper rotation
+      const centerX = shape.x ?? 0;
+      const centerY = shape.y ?? 0;
       const width = shape.width ?? SHAPE_DEFAULTS.RECTANGLE_WIDTH;
       const height = shape.height ?? SHAPE_DEFAULTS.RECTANGLE_HEIGHT;
       
       return (
         <Rect
-          x={x}
-          y={y}
+          ref={shapeRef}
+          id={shape.id}
+          x={centerX}
+          y={centerY}
+          offsetX={width / 2}
+          offsetY={height / 2}
           width={width}
           height={height}
+          rotation={(shape.rotation || 0) * 180 / Math.PI}
           {...baseStyle}
-          listening={false} // Canvas handles all mouse interactions
+          draggable={true}
+          onDragStart={handleDragStart}
+          onDragMove={handleDragMove}
+          onDragEnd={handleDragEndCallback}
         />
       );
     }
       
     case 'ellipse': {
-      // Ensure all properties are defined with fallbacks
-      const x = shape.x ?? 0;
-      const y = shape.y ?? 0;
+      // Shape coordinates are center-based (ellipses are naturally center-based)
+      const centerX = shape.x ?? 0;
+      const centerY = shape.y ?? 0;
       const width = shape.width ?? SHAPE_DEFAULTS.ELLIPSE_WIDTH;
       const height = shape.height ?? SHAPE_DEFAULTS.ELLIPSE_HEIGHT;
       
       return (
         <Ellipse
-          x={x + width / 2}
-          y={y + height / 2}
+          ref={shapeRef}
+          id={shape.id}
+          x={centerX}  // Use center directly
+          y={centerY}
           radiusX={width / 2}
           radiusY={height / 2}
+          rotation={(shape.rotation || 0) * 180 / Math.PI}
           {...baseStyle}
-          listening={false}
+          draggable={true}
+          onDragStart={handleDragStart}
+          onDragMove={handleDragMove}
+          onDragEnd={handleDragEndCallback}
         />
       );
     }
@@ -67,20 +109,34 @@ const Shape = React.memo(({ shape }) => {
         return null;
       }
 
-      // Ensure all text properties are defined with fallbacks
-      const x = shape.x ?? 0;
-      const y = shape.y ?? 0;
+      // Store has center coordinates, Konva needs center for proper rotation
+      const centerX = shape.x ?? 0;
+      const centerY = shape.y ?? 0;
       const width = shape.width ?? SHAPE_DEFAULTS.TEXT_WIDTH;
       const height = shape.height ?? SHAPE_DEFAULTS.TEXT_HEIGHT;
       const textFill = shape.fill ?? SHAPE_DEFAULTS.FILL;
       
       return (
-        <>
+        <Group 
+          ref={shapeRef}
+          id={shape.id}
+          x={centerX}
+          y={centerY}
+          offsetX={width / 2}
+          offsetY={height / 2}
+          width={width}
+          height={height}
+          rotation={(shape.rotation || 0) * 180 / Math.PI}
+          draggable={true}
+          onDragStart={handleDragStart}
+          onDragMove={handleDragMove}
+          onDragEnd={handleDragEndCallback}
+        >
           {/* Selection background for text (when selected) */}
           {isSelected && (
             <Rect
-              x={x}
-              y={y}
+              x={0}
+              y={0}
               width={width}
               height={height}
               fill="transparent"
@@ -92,8 +148,8 @@ const Shape = React.memo(({ shape }) => {
           
           {/* Text with preserved color */}
           <Text
-            x={x}
-            y={y}
+            x={0}
+            y={0}
             text={shape.text ?? SHAPE_DEFAULTS.TEXT_CONTENT}
             fontSize={shape.fontSize ?? SHAPE_DEFAULTS.TEXT_FONT_SIZE}
             fontFamily={shape.fontFamily ?? SHAPE_DEFAULTS.TEXT_FONT_FAMILY}
@@ -112,9 +168,8 @@ const Shape = React.memo(({ shape }) => {
             width={width}
             height={height}
             fill={textFill} // 🎯 Always preserve the actual text color
-            listening={false}
           />
-        </>
+        </Group>
       );
     }
       

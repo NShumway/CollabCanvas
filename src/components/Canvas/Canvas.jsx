@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-import { Stage, Layer, Rect, Ellipse } from 'react-konva';
+import { Stage, Layer, Rect, Ellipse, Transformer } from 'react-konva';
 import useCanvasStore from '@/store/canvasStore';
 import { useFirestoreSync } from '@/hooks/useFirestoreSync';
 import { useCursorSync } from '@/hooks/useCursorSync';
@@ -19,15 +19,19 @@ const Canvas = () => {
   const stageRef = useRef(null);
   const syncEngineRef = useRef(null);
   const cursorThrottleRef = useRef(null);
+  const transformerRef = useRef(null);
+  const shapeRefs = useRef(new Map()); // Map of shapeId -> ref for transformer attachment
+  
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionRect, setSelectionRect] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const [isSpacePressed, setIsSpacePressed] = useState(false);
-  const [isDraggingShapes, setIsDraggingShapes] = useState(false);
-  const [dragState, setDragState] = useState({
-    startPos: null,
-    draggedShapes: [],
-    initialPositions: {}
+  
+  // Transform state
+  const [isTransforming, setIsTransforming] = useState(false);
+  const [transformState, setTransformState] = useState({
+    initialShapes: {}, // Store initial shape properties during transform
+    aspectLock: false, // Whether aspect ratio should be maintained
   });
   
   // Selective store subscriptions for performance
@@ -54,6 +58,8 @@ const Canvas = () => {
   const currentUser = useCanvasStore(state => state.currentUser);
   const users = useCanvasStore(state => state.users);
   const startTextEdit = useCanvasStore(state => state.startTextEdit);
+  const aspectLock = useCanvasStore(state => state.aspectLock);
+  const toggleAspectLock = useCanvasStore(state => state.toggleAspectLock);
 
   // Debug selection tracking removed for performance
   // Debug selection changes removed for performance
@@ -81,9 +87,39 @@ const Canvas = () => {
     };
   }, []);
   
+  // Attach transformer to selected shapes
+  useEffect(() => {
+    const transformer = transformerRef.current;
+    if (!transformer) return;
+    
+    // Get selected shape nodes from refs
+    const selectedNodes = selectedIds
+      .map(id => shapeRefs.current.get(id))
+      .filter(node => node); // Filter out undefined refs
+    
+    if (selectedNodes.length > 0) {
+      // Attach transformer to selected nodes
+      transformer.nodes(selectedNodes);
+      transformer.getLayer()?.batchDraw();
+    } else {
+      // Clear transformer when no selection
+      transformer.nodes([]);
+      transformer.getLayer()?.batchDraw();
+    }
+  }, [selectedIds]);
+  
   // Store latest viewport in ref to avoid callback recreation on viewport changes
   const viewportRef = useRef(viewport);
   viewportRef.current = viewport;
+  
+  // Callback to handle shape refs from Shape components
+  const handleShapeRef = useCallback((shapeId, nodeRef) => {
+    if (nodeRef) {
+      shapeRefs.current.set(shapeId, nodeRef);
+    } else {
+      shapeRefs.current.delete(shapeId);
+    }
+  }, []);
   
   // Throttled cursor position update (50ms = 20Hz)
   const updateCursorPosition = useCallback((pointer) => {
@@ -123,40 +159,8 @@ const Canvas = () => {
     }, 50);
   }, [currentUser, updateCursorPosition]);
 
-  // Handle shape dragging (immediate local display, 100ms debounced server sync)
-  const handleShapeDragging = useCallback((pointer) => {
-    if (!isDraggingShapes || !dragState.startPos) return;
-    
-    const worldPos = screenToWorld(pointer.x, pointer.y);
-    const deltaX = worldPos.x - dragState.startPos.x;
-    const deltaY = worldPos.y - dragState.startPos.y;
-    
-    // IMMEDIATE local display update
-    if (dragState.draggedShapes.length > 0) {
-      const batchUpdates = [];
-      
-      for (const shapeId of dragState.draggedShapes) {
-        const initialPos = dragState.initialPositions[shapeId];
-        if (initialPos) {
-          const newPos = {
-            x: initialPos.x + deltaX,
-            y: initialPos.y + deltaY
-          };
-          batchUpdates.push({ shapeId, updates: newPos });
-        }
-      }
-      
-      if (batchUpdates.length > 0 && syncEngineRef.current) {
-        // Apply local changes immediately for smooth UX
-        syncEngineRef.current.applyBatchChanges(batchUpdates);
-      }
-    }
-    
-    // Update cursor position immediately during drag (no throttling)
-    if (writeCursorPosition) {
-      writeCursorPosition(worldPos.x, worldPos.y);
-    }
-  }, [isDraggingShapes, dragState, screenToWorld, writeCursorPosition]);
+  // REMOVED: handleShapeDragging - Konva Transformer now handles ALL shape interactions
+  // This eliminates the conflict between dragging systems that caused jerkiness
 
   // Handle selection rectangle updates
   const handleSelectionRectangle = useCallback((pointer) => {
@@ -169,6 +173,7 @@ const Canvas = () => {
       height: worldPos.y - prev.y,
     }));
   }, [isSelecting, selectionRect, screenToWorld]);
+
 
   // ORGANIZED MOUSE MOVE: Calls sub-handlers for each responsibility
   const handleMouseMove = useCallback((e) => {
@@ -186,9 +191,9 @@ const Canvas = () => {
     
     // Handle each responsibility separately
     handleCursorUpdate(pointer);
-    handleShapeDragging(pointer);
     handleSelectionRectangle(pointer);
-  }, [currentUser, handleCursorUpdate, handleShapeDragging, handleSelectionRectangle]);
+    // Note: Shape dragging and panning now handled by Konva's built-in systems
+  }, [currentUser, handleCursorUpdate, handleSelectionRectangle]);
   
   // Cleanup cursor throttle on unmount
   useEffect(() => {
@@ -329,6 +334,12 @@ const Canvas = () => {
       if (e.key === 'v' || e.key === 'V') {
         e.preventDefault();
         clearCreateMode();
+      }
+      
+      // Shift+A - Toggle aspect lock for transforms
+      if (e.shiftKey && (e.key === 'a' || e.key === 'A')) {
+        e.preventDefault();
+        toggleAspectLock();
       }
       
       // Text formatting shortcuts (only when text is selected)
@@ -517,6 +528,7 @@ const Canvas = () => {
     updateViewport({
       x: stage.x(),
       y: stage.y(),
+      zoom: viewport.zoom,
     });
   };
   
@@ -560,62 +572,153 @@ const Canvas = () => {
   };
   
   // Helper function to get the topmost shape at a given world position
-  const getShapeAtPosition = (worldX, worldY) => {
-    // Get shapes sorted by z-index (highest first) to find topmost shape
-    const sortedShapes = Object.values(shapes).sort((a, b) => (b.zIndex || 0) - (a.zIndex || 0));
+  // REMOVED: Complex custom hit detection - Konva's stage.getIntersection() handles this!
+
+  // Transform event handlers
+  const handleTransformStart = useCallback(() => {
+    setIsTransforming(true);
     
-    for (const shape of sortedShapes) {
-      let isInside = false;
+    // Store initial shape properties for all selected shapes
+    const initialShapes = {};
+    selectedIds.forEach(shapeId => {
+      const shape = shapes[shapeId];
+      if (shape) {
+        initialShapes[shapeId] = {
+          x: shape.x,
+          y: shape.y,
+          width: shape.width,
+          height: shape.height,
+          rotation: shape.rotation || 0,
+        };
+      }
+    });
+    
+    setTransformState(prev => ({
+      ...prev,
+      initialShapes
+    }));
+  }, [selectedIds, shapes]);
+
+  const handleTransform = useCallback(() => {
+    // During transform, let Konva handle the visual updates for smooth 60fps performance
+    // We'll only sync to store at the end to avoid React re-render jerkiness
+    
+    if (!isTransforming || !transformerRef.current) return;
+    
+    const transformer = transformerRef.current;
+    const nodes = transformer.nodes();
+    
+    // Reset node scales after baking into width/height AND update offsets
+    nodes.forEach(node => {
+      if (node.scaleX() !== 1 || node.scaleY() !== 1) {
+        const width = node.width() * node.scaleX();
+        const height = node.height() * node.scaleY();
+        
+        // Update dimensions
+        node.width(width);
+        node.height(height);
+        node.scaleX(1);
+        node.scaleY(1);
+        
+        // CRITICAL: Update offsets for new dimensions to maintain center position
+        node.offsetX(width / 2);
+        node.offsetY(height / 2);
+      }
+    });
+  }, [isTransforming]);
+
+  const handleTransformEnd = useCallback(() => {
+    if (!isTransforming || !transformerRef.current) return;
+    
+    const transformer = transformerRef.current;
+    const nodes = transformer.nodes();
+    
+    // Apply final transforms and sync to server
+    nodes.forEach(node => {
+      const shapeId = node.id();
+      const shape = shapes[shapeId];
+      if (!shape) return;
       
-      switch (shape.type) {
-        case 'rectangle': {
-          // Use bounding box collision detection with fallbacks
-          const x = shape.x ?? 0;
-          const y = shape.y ?? 0;
-          const width = shape.width ?? SHAPE_DEFAULTS.RECTANGLE_WIDTH;
-          const height = shape.height ?? SHAPE_DEFAULTS.RECTANGLE_HEIGHT;
-          isInside = worldX >= x && 
-                    worldX <= x + width &&
-                    worldY >= y && 
-                    worldY <= y + height;
-          break;
-        }
-          
-        case 'ellipse': {
-          // Use unified bounding box collision detection with fallbacks
-          const x = shape.x ?? 0;
-          const y = shape.y ?? 0;
-          const width = shape.width ?? SHAPE_DEFAULTS.ELLIPSE_WIDTH;
-          const height = shape.height ?? SHAPE_DEFAULTS.ELLIPSE_HEIGHT;
-          isInside = worldX >= x && 
-                    worldX <= x + width && 
-                    worldY >= y && 
-                    worldY <= y + height;
-          break;
-        }
-          
-        case 'text': {
-          const x = shape.x ?? 0;
-          const y = shape.y ?? 0;
-          const textWidth = shape.width ?? SHAPE_DEFAULTS.TEXT_WIDTH;
-          const textHeight = shape.height ?? (shape.fontSize ?? SHAPE_DEFAULTS.TEXT_FONT_SIZE) * 1.2;
-          isInside = worldX >= x && 
-                    worldX <= x + textWidth &&
-                    worldY >= y && 
-                    worldY <= y + textHeight;
-          break;
-        }
-          
-        // Removed: line collision detection (line shapes eliminated)
+      // Calculate final dimensions after scaling
+      const finalWidth = Math.abs(node.width() * node.scaleX());
+      const finalHeight = Math.abs(node.height() * node.scaleY());
+      
+      // With proper offsetX/offsetY, node.x() and node.y() are center coordinates
+      const finalAttrs = {
+        x: node.x(),  // Center X coordinate (due to offsetX)
+        y: node.y(),  // Center Y coordinate (due to offsetY)
+        width: finalWidth,
+        height: finalHeight,
+        rotation: node.rotation() * Math.PI / 180, // Convert degrees back to radians for store
+      };
+      
+      // Update local store immediately for responsiveness
+      if (syncEngineRef.current) {
+        syncEngineRef.current.applyLocalChange(shapeId, finalAttrs);
+        
+        // Queue write to server
+        const updatedShape = { ...shape, ...finalAttrs };
+        syncEngineRef.current.queueWrite(shapeId, updatedShape, true);
       }
       
-      if (isInside) {
-        return shape;
-      }
-    }
+      // Update node offsets for new dimensions and reset scales
+      node.offsetX(finalWidth / 2);
+      node.offsetY(finalHeight / 2);
+      node.width(finalWidth);
+      node.height(finalHeight);
+      node.scaleX(1);
+      node.scaleY(1);
+    });
     
-    return null;
-  };
+    setIsTransforming(false);
+    setTransformState(prev => ({
+      ...prev,
+      initialShapes: {}
+    }));
+  }, [isTransforming, shapes]);
+
+  // Handle shape position updates (called during drag move and end)
+  const handleShapePositionUpdate = useCallback((shapeId, newX, newY) => {
+    const shape = shapes[shapeId];
+    if (!shape || !syncEngineRef.current) return;
+    
+    // newX, newY are center coordinates due to offsetX/offsetY in Shape.jsx
+    const finalAttrs = { x: newX, y: newY };
+    
+    // Always update local state immediately for smooth UX
+    syncEngineRef.current.applyLocalChange(shapeId, finalAttrs);
+    
+    // Debounce server writes to avoid excessive network calls during drag
+    const updatedShape = { ...shape, ...finalAttrs };
+    syncEngineRef.current.queueWrite(shapeId, updatedShape, false); // false = debounced write
+  }, [shapes]);
+
+
+  // Handle stage panning drag end (when stage itself is dragged, not shapes)
+  const handleStageDragEnd = useCallback(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    
+    // Update viewport to match stage position after manual panning
+    updateViewport({
+      x: stage.x(),
+      y: stage.y(),
+      zoom: viewport.zoom,
+    });
+  }, [updateViewport, viewport.zoom]);
+
+  // Aspect lock handler - passed to transformer
+  const getTransformConfig = useCallback(() => {
+    return {
+      enabledAnchors: ['top-left', 'top-center', 'top-right', 'middle-right', 
+                      'bottom-right', 'bottom-center', 'bottom-left', 'middle-left'],
+      keepRatio: aspectLock,
+      boundBoxFunc: (oldBox, newBox) => {
+        // Optional: Add boundary constraints here if needed
+        return newBox;
+      }
+    };
+  }, [aspectLock]);
 
   // Helper function to check if shapes intersect with selection rectangle  
   const getShapesInSelection = (selectionRect) => {
@@ -631,40 +734,41 @@ const Canvas = () => {
       
       switch (shape.type) {
         case 'rectangle': {
-          // Use bounding box for selection with fallbacks
-          const x = shape.x ?? 0;
-          const y = shape.y ?? 0;
+          // Convert center coordinates to bounding box for selection
+          const centerX = shape.x ?? 0;
+          const centerY = shape.y ?? 0;
           const width = shape.width ?? SHAPE_DEFAULTS.RECTANGLE_WIDTH;
           const height = shape.height ?? SHAPE_DEFAULTS.RECTANGLE_HEIGHT;
-          shapeLeft = x;
-          shapeRight = x + width;
-          shapeTop = y;
-          shapeBottom = y + height;
+          shapeLeft = centerX - width / 2;
+          shapeRight = centerX + width / 2;
+          shapeTop = centerY - height / 2;
+          shapeBottom = centerY + height / 2;
           break;
         }
           
         case 'ellipse': {
-          // Use unified bounding box for selection with fallbacks
-          const x = shape.x ?? 0;
-          const y = shape.y ?? 0;
+          // Convert center coordinates to bounding box for selection
+          const centerX = shape.x ?? 0;
+          const centerY = shape.y ?? 0;
           const width = shape.width ?? SHAPE_DEFAULTS.ELLIPSE_WIDTH;
           const height = shape.height ?? SHAPE_DEFAULTS.ELLIPSE_HEIGHT;
-          shapeLeft = x;
-          shapeRight = x + width;
-          shapeTop = y;
-          shapeBottom = y + height;
+          shapeLeft = centerX - width / 2;
+          shapeRight = centerX + width / 2;
+          shapeTop = centerY - height / 2;
+          shapeBottom = centerY + height / 2;
           break;
         }
           
         case 'text': {
-          const x = shape.x ?? 0;
-          const y = shape.y ?? 0;
+          // Convert center coordinates to bounding box for selection
+          const centerX = shape.x ?? 0;
+          const centerY = shape.y ?? 0;
           const width = shape.width ?? SHAPE_DEFAULTS.TEXT_WIDTH;
           const height = shape.height ?? (shape.fontSize ?? SHAPE_DEFAULTS.TEXT_FONT_SIZE) * 1.2;
-          shapeLeft = x;
-          shapeRight = x + width;
-          shapeTop = y;
-          shapeBottom = y + height;
+          shapeLeft = centerX - width / 2;
+          shapeRight = centerX + width / 2;
+          shapeTop = centerY - height / 2;
+          shapeBottom = centerY + height / 2;
           break;
         }
           
@@ -697,16 +801,35 @@ const Canvas = () => {
       y: (pointer.y - viewport.y) / viewport.zoom,
     };
         
-    // Space key or middle mouse button = panning (let Konva handle it)
-    if (isSpacePressed || e.evt.button === 1) {
+    // Middle mouse button = panning (let Konva handle it)
+    if (e.evt.button === 1) {
       return; // Let Konva's built-in drag handle panning
     }
     
-    // Check if we clicked on a shape (not just the stage background)
-    const clickedShape = getShapeAtPosition(worldPos.x, worldPos.y);
+    // Space key pressed = panning mode, don't start box select
+    if (isSpacePressed) {
+      return; // Stage will handle panning since it's draggable when space pressed
+    }
+    
+    // Use Konva's built-in hit detection instead of custom logic
+    const clickedNode = stage.getIntersection(pointer);
+    
+    // Find the shape ID by walking up the node tree if needed
+    // This handles cases where we click on inner nodes (like Text) that don't have IDs
+    let shapeId = null;
+    let currentNode = clickedNode;
+    while (currentNode && !shapeId) {
+      if (currentNode.id() && shapes[currentNode.id()]) {
+        shapeId = currentNode.id();
+        break;
+      }
+      currentNode = currentNode.getParent();
+    }
+    
+    const clickedShape = shapeId ? shapes[shapeId] : null;
     
     if (clickedShape) {
-      // === SHAPE CLICK: Handle selection and optionally start dragging ===
+      // === SHAPE CLICK: Handle selection ===
       
       if (e.evt.shiftKey) {
         // Shift+click: Toggle shape in/out of selection (NO DRAGGING)
@@ -724,34 +847,16 @@ const Canvas = () => {
         }
         // If shape was already selected, keep current selection
         
-        // Setup dragging for currently selected shapes (separate concern)
-        const currentlySelectedIds = selectedIdsSet.has(clickedShape.id) 
-          ? selectedIds 
-          : [clickedShape.id];
-        
-        if (currentlySelectedIds.length > 0) {
-          const initialPositions = {};
-          currentlySelectedIds.forEach(shapeId => {
-            const shape = shapes[shapeId];
-            if (shape) {
-              initialPositions[shapeId] = { x: shape.x, y: shape.y };
-            }
-          });
-          
-          setIsDraggingShapes(true);
-          setDragState({
-            startPos: worldPos,
-            draggedShapes: currentlySelectedIds,
-            initialPositions
-          });
-        }
+        // Shape interaction now handled entirely by Konva Transformer
+        // No need for manual dragging setup - transformer handles drag/resize/rotate
       }
       
       return; // Handled shape click
     }
     
-    // === BACKGROUND CLICK: Handle shape creation, drag-to-select, or clear selection ===
+    // === BACKGROUND CLICK: Handle panning, shape creation, drag-to-select, or clear selection ===
     if (e.target === e.target.getStage()) {
+      
       
       if (createMode) {
         // ✅ Unified shape creation - eliminates massive code duplication
@@ -812,24 +917,9 @@ const Canvas = () => {
 
   // Handle mouse up to complete shape dragging or selection
   const handleStageMouseUp = (e) => {
-        // Mouse up event
+    if (isSpacePressed) return; // Don't interfere with space-key panning
     
-    if (isSpacePressed) return; // Don't interfere with panning
-    
-    // Finalize shape dragging
-    if (isDraggingShapes && dragState.startPos) {
-      // Mouse move already handled all local updates + debounced server sync
-      // Just reset drag state - no additional server writes needed
-      
-      setIsDraggingShapes(false);
-      setDragState({
-        startPos: null,
-        draggedShapes: [],
-        initialPositions: {}
-      });
-      
-      return; // Don't handle selection completion during shape drag
-    }
+    // Note: Shape dragging now handled entirely by Konva Transformer
     
     // Complete drag-to-select
     if (isSelecting) {
@@ -868,8 +958,9 @@ const Canvas = () => {
       y: (pointer.y - viewport.y) / viewport.zoom,
     };
     
-    // Check if we double-clicked on a text shape
-    const clickedShape = getShapeAtPosition(worldPos.x, worldPos.y);
+    // Use Konva's built-in hit detection for double-click too
+    const clickedNode = stage.getIntersection(pointer);
+    const clickedShape = clickedNode ? shapes[clickedNode.id()] : null;
     
     if (clickedShape && clickedShape.type === 'text') {
       // Start text editing
@@ -924,7 +1015,7 @@ const Canvas = () => {
         <div>Shapes: {Object.keys(shapes).length} | Selected: {selectedIds.length}</div>
         {isSpacePressed && <div className="text-blue-400">🖐️ Pan Mode (Space)</div>}
         {createMode && <div className="text-green-400">✏️ Create Mode ({createMode})</div>}
-        {isDraggingShapes && <div className="text-purple-400">🎯 Dragging {dragState.draggedShapes.length} shape(s)</div>}
+        {/* Dragging status now handled by Konva Transformer */}
         {isLoading && <div className="text-yellow-400">🔄 Syncing...</div>}
       </div>
       
@@ -936,8 +1027,8 @@ const Canvas = () => {
         y={viewport.y}
         scaleX={viewport.zoom}
         scaleY={viewport.zoom}
-        draggable={(createMode === null && !isDraggingShapes && !isSelecting) || isSpacePressed} // Allow panning when in select mode OR when space is pressed
-        onDragEnd={handleDragEnd}
+        draggable={!isTransforming && (isSpacePressed)} // Only draggable when space pressed
+        onDragEnd={handleStageDragEnd}
         onWheel={handleWheel}
         onMouseDown={handleStageMouseDown}
         onMouseUp={handleStageMouseUp}
@@ -945,7 +1036,6 @@ const Canvas = () => {
         tabIndex={0} // Make Stage focusable for keyboard events
         style={{ 
           cursor: isSpacePressed ? 'grab' : 
-                  isDraggingShapes ? 'grabbing' :
                   createMode ? 'crosshair' : 
                   isSelecting ? 'crosshair' : 'default',
           outline: 'none' // Remove focus outline for better UX
@@ -978,9 +1068,28 @@ const Canvas = () => {
                 <Shape 
                   key={shape.id} 
                   shape={shape} 
+                  onShapeRef={handleShapeRef}
+                  onDragEnd={handleShapePositionUpdate}
                 />
-              )), [shapes]
+              )), [shapes, handleShapeRef, handleShapePositionUpdate]
           )}
+          
+          {/* Transformer for selected shapes */}
+          <Transformer
+            ref={transformerRef}
+            {...getTransformConfig()}
+            onTransformStart={handleTransformStart}
+            onTransform={handleTransform}
+            onTransformEnd={handleTransformEnd}
+            shouldOverdrawWholeArea={true}
+            anchorSize={8}
+            anchorStroke="#3B82F6"
+            anchorFill="#FFFFFF"
+            anchorStrokeWidth={2}
+            borderStroke="#3B82F6"
+            borderStrokeWidth={2}
+            borderDash={[4, 4]}
+          />
         </Layer>
         
         {/* Cursors Layer - Above shapes layer */}

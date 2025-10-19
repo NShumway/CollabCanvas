@@ -12,7 +12,9 @@ const Toolbar = () => {
     selectedIds, 
     shapes,
     updateShape,
-    currentUser 
+    currentUser,
+    aspectLock,
+    toggleAspectLock
   } = useCanvasStore();
   
   const [showColorPicker, setShowColorPicker] = useState(false);
@@ -240,6 +242,25 @@ const Toolbar = () => {
                 </svg>
               )}
             </button>
+            
+            {/* Aspect Lock Toggle */}
+            <button
+              onClick={toggleAspectLock}
+              className={toolButtonClass(aspectLock)}
+              title="Lock Aspect Ratio (Shift+A)"
+            >
+              {aspectLock ? (
+                // Locked aspect ratio icon
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M6,10V8A6,6 0 0,1 18,8V10H20V8A8,8 0 0,0 4,8V10H6M8,12A2,2 0 0,1 10,10H14A2,2 0 0,1 16,12V16A2,2 0 0,1 14,18H10A2,2 0 0,1 8,16V12Z"/>
+                </svg>
+              ) : (
+                // Unlocked aspect ratio icon
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M6,10V8A6,6 0 0,1 18,8V10H22L21,12H20V16A2,2 0 0,1 18,18H10A2,2 0 0,1 8,16V12H6L7,10H6M18,12H10V16H18V12Z"/>
+                </svg>
+              )}
+            </button>
           </div>
         )}
         
@@ -359,8 +380,10 @@ const Toolbar = () => {
             /* Status Text (when no text selected) */
             <div className="text-gray-400 text-sm">
               {createMode === null && selectedIds.length === 0 && '🖱️ Select and move objects'}
-              {createMode === null && selectedIds.length === 1 && '✨ 1 object selected'}
-              {createMode === null && selectedIds.length > 1 && `✨ ${selectedIds.length} objects selected`}
+              {createMode === null && selectedIds.length === 1 && 
+                `✨ 1 object selected${aspectLock ? ' (Aspect locked)' : ''}`}
+              {createMode === null && selectedIds.length > 1 && 
+                `✨ ${selectedIds.length} objects selected${aspectLock ? ' (Aspect locked)' : ''}`}
               {createMode === 'rectangle' && '📦 Click and drag to create rectangle'}
               {createMode === 'ellipse' && '⭕ Click and drag to create ellipse'}
               {createMode === 'text' && '📝 Click to place text'}

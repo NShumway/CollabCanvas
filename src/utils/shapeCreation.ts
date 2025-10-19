@@ -1,7 +1,8 @@
 /**
  * Shape Creation Utilities
  * 
- * DRY solution for shape creation to eliminate code duplication
+ * DRY solution for shape creation to eliminate code duplication.
+ * All created shapes use center-based coordinates (x, y = center point).
  */
 
 import type { Shape, ShapeType } from '@/types';

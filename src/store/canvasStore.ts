@@ -42,6 +42,9 @@ const useCanvasStore = create<CanvasStore>((set, get) => ({
   editingTextId: null, // ID of the text shape currently being edited (null means no editing)
   textEditPosition: { x: 0, y: 0 }, // Position for the DOM input overlay
   
+  // Transform state
+  aspectLock: false, // Whether aspect ratio should be maintained during transforms
+  
   // Shape actions
   setShapes: (shapes) => set({ 
     shapes,
@@ -424,6 +427,11 @@ const useCanvasStore = create<CanvasStore>((set, get) => ({
     editingTextId: null,
     textEditPosition: { x: 0, y: 0 },
   }),
+  
+  // Transform actions
+  setAspectLock: (aspectLock: boolean) => set({ aspectLock }),
+  
+  toggleAspectLock: () => set((state) => ({ aspectLock: !state.aspectLock })),
   
   // Tier 2: Sync tracking actions - manage pending writes to prevent echo loops
   addPendingWrite: (shapeId: string, timestamp: number = Date.now()) => set((state) => ({

@@ -2,6 +2,7 @@
  * Firebase and Firestore Type Definitions
  * 
  * Types for Firebase integration, Firestore documents, and real-time sync.
+ * All shape coordinates (x, y) represent the CENTER of the shape.
  */
 
 import type { Timestamp } from 'firebase/firestore';
@@ -17,6 +18,7 @@ export interface FirestoreShapeDocument {
   y: number;
   fill: string;
   zIndex: number;
+  rotation?: number;
   
   // Rectangle-specific fields
   width?: number;
@@ -157,6 +159,7 @@ export const convertToFirestoreShape = (shape: Shape): Partial<FirestoreShapeDoc
     y: shape.y ?? 0, // Fallback to origin if undefined  
     fill: shape.fill ?? SHAPE_DEFAULTS.FILL,
     zIndex: shape.zIndex ?? SHAPE_DEFAULTS.Z_INDEX,
+    rotation: shape.rotation ?? 0, // Include rotation property
     updatedBy: shape.updatedBy,
     ...(shape.clientTimestamp !== undefined && { clientTimestamp: shape.clientTimestamp }),
   };
@@ -196,6 +199,7 @@ export const convertFromFirestoreShape = (doc: FirestoreShapeDocument): Shape =>
     y: doc.y ?? 0, // Fallback to origin if undefined
     fill: doc.fill ?? SHAPE_DEFAULTS.FILL,
     zIndex: doc.zIndex ?? SHAPE_DEFAULTS.Z_INDEX,
+    rotation: doc.rotation ?? 0, // Include rotation property
     updatedAt: convertFirestoreTimestamp(doc.updatedAt),
     createdBy: doc.createdBy ?? 'unknown',
     updatedBy: doc.updatedBy ?? 'unknown',

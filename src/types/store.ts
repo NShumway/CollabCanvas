@@ -50,6 +50,9 @@ export interface CanvasStoreState {
   editingTextId: string | null;
   textEditPosition: { x: number; y: number };
   
+  // Transform state
+  aspectLock: boolean;
+  
   // Future AI state (for upcoming PRs)
   // aiCommands: Record<string, AICommand>;
   // chatMessages: ChatMessage[];
@@ -111,6 +114,10 @@ export interface CanvasStoreActions {
   // Text editing actions
   startTextEdit: (shapeId: string, position: { x: number; y: number }) => void;
   stopTextEdit: () => void;
+  
+  // Transform actions
+  setAspectLock: (aspectLock: boolean) => void;
+  toggleAspectLock: () => void;
   
   // Dynamic selection color actions
   updateSelectionColor: () => void;

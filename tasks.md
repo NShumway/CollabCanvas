@@ -163,23 +163,32 @@ The following PRs have been completed successfully:
 
 ---
 
-## PR #11 — Transform System (Resize, Rotate, Aspect Lock)
+## PR #11 — Transform System (Resize, Rotate, Aspect Lock) ✅
 **Goal:** Implement resize handles, rotate, aspect lock, live preview and debounced sync.
 
-### Tasks
-1. **Konva.Transformer integration**
+### Tasks Completed ✅
+1. **Konva.Transformer integration** ✅
    - Show transformer handles for selected shapes.
    - Live preview during transform operations.
    - Debounced sync writes during continuous transforms.
-2. **Transform controls**
+2. **Transform controls** ✅
    - Resize handles (8 directional).
    - Rotation handle.
-   - Aspect lock toggle in toolbar.
-3. **Multi-shape transforms**
+   - Aspect lock toggle in toolbar with keyboard shortcut (Shift+A).
+3. **Multi-shape transforms** ✅
    - Transform multiple selected shapes together.
    - Maintain relative positions and proportions.
-4. **Unit Tests**: Transform calculations, debouncing logic
-5. Acceptance: Real-time transform preview with synced final state.
+4. **Unit Tests** ✅: Transform calculations, position stability, rotation precision, debouncing logic (27 comprehensive tests)
+5. **Major Architecture Migration** ✅: Center-based coordinate system for intuitive rotation/scaling behavior
+6. **Event System Separation** ✅: Clean pan/drag/transform conflict resolution with proper event bubbling control
+7. **Hit Detection Improvements** ✅: Robust text shape selection with node tree walking algorithm
+8. Acceptance ✅: Real-time transform preview with synced final state, stable positioning, accurate rotation.
+
+**BONUS ACHIEVEMENTS:**
+- Center-based coordinate system migration for intuitive transform behavior
+- Comprehensive transform stability testing (prevents recurring position drift bugs)
+- Advanced hit detection supporting nested Konva structures
+- Professional event handling (pan only with space, clean transform/drag separation)
 
 ---
 

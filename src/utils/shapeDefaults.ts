@@ -2,12 +2,16 @@
  * Shape Default Values and Constants
  * 
  * Centralized constants to prevent inconsistencies and magic numbers
+ * 
+ * COORDINATE SYSTEM: All shape coordinates (x, y) represent the CENTER of the shape.
+ * This aligns with Konva's rotation/scaling behavior and provides intuitive UX.
  */
 
 export const SHAPE_DEFAULTS = {
   // Universal defaults
   FILL: '#E2E8F0',
   Z_INDEX: 0,
+  ROTATION: 0, // Default rotation in radians
   
   // Rectangle defaults
   RECTANGLE_WIDTH: 100,
@@ -37,10 +41,12 @@ export const SHAPE_CREATION_DEFAULTS = {
   rectangle: {
     width: SHAPE_DEFAULTS.RECTANGLE_WIDTH,
     height: SHAPE_DEFAULTS.RECTANGLE_HEIGHT,
+    rotation: SHAPE_DEFAULTS.ROTATION,
   },
   ellipse: {
     width: SHAPE_DEFAULTS.ELLIPSE_WIDTH,
     height: SHAPE_DEFAULTS.ELLIPSE_HEIGHT,
+    rotation: SHAPE_DEFAULTS.ROTATION,
   },
   // Removed: line defaults (line shapes eliminated)
   text: {
@@ -50,5 +56,54 @@ export const SHAPE_CREATION_DEFAULTS = {
     textAlign: SHAPE_DEFAULTS.TEXT_ALIGN,
     width: SHAPE_DEFAULTS.TEXT_WIDTH,
     height: SHAPE_DEFAULTS.TEXT_HEIGHT,
+    rotation: SHAPE_DEFAULTS.ROTATION,
   },
 } as const;
+
+/**
+ * Coordinate System Conversion Utilities
+ * 
+ * Helper functions for converting between center-based and top-left coordinate systems.
+ * Useful for legacy compatibility, boundary calculations, and debugging.
+ */
+
+/**
+ * Convert center coordinates to top-left coordinates
+ * @param centerX - Center X coordinate
+ * @param centerY - Center Y coordinate
+ * @param width - Shape width
+ * @param height - Shape height
+ * @returns Object with top-left coordinates
+ */
+export const centerToTopLeft = (centerX: number, centerY: number, width: number, height: number) => ({
+  x: centerX - width / 2,
+  y: centerY - height / 2
+});
+
+/**
+ * Convert top-left coordinates to center coordinates
+ * @param x - Top-left X coordinate
+ * @param y - Top-left Y coordinate
+ * @param width - Shape width
+ * @param height - Shape height
+ * @returns Object with center coordinates
+ */
+export const topLeftToCenter = (x: number, y: number, width: number, height: number) => ({
+  x: x + width / 2,
+  y: y + height / 2
+});
+
+/**
+ * Get bounding box from center coordinates (for selection, collision detection)
+ * @param centerX - Center X coordinate
+ * @param centerY - Center Y coordinate
+ * @param width - Shape width
+ * @param height - Shape height
+ * @returns Object with left, right, top, bottom bounds
+ */
+export const getCenterBounds = (centerX: number, centerY: number, width: number, height: number) => ({
+  left: centerX - width / 2,
+  right: centerX + width / 2,
+  top: centerY - height / 2,
+  bottom: centerY + height / 2
+});

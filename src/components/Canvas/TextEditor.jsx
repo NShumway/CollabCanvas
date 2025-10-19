@@ -3,6 +3,13 @@ import useCanvasStore from '@/store/canvasStore';
 import { createSyncEngine } from '@/services/syncEngine';
 import { calculateTextHeight } from '@/utils/textMeasurement';
 
+/**
+ * TextEditor Component
+ * 
+ * Provides an overlay textarea for editing text shapes.
+ * Converts center-based shape coordinates to top-left positioning for the overlay.
+ */
+
 const TextEditor = () => {
   const {
     editingTextId,
@@ -116,8 +123,13 @@ const TextEditor = () => {
   const canvasRect = canvasContainer?.getBoundingClientRect() || { left: 0, top: 0 };
   
   // Calculate world coordinates transformed to screen coordinates
-  const worldX = shape.x * viewport.zoom + viewport.x;
-  const worldY = shape.y * viewport.zoom + viewport.y;
+  // Convert center coordinates to top-left for text editor positioning
+  const shapeWidth = shape.width || 200;
+  const shapeHeight = shape.height || (shape.fontSize || 16) * 1.2;
+  const topLeftX = shape.x - shapeWidth / 2;   // Center to top-left conversion
+  const topLeftY = shape.y - shapeHeight / 2;  // Center to top-left conversion
+  const worldX = topLeftX * viewport.zoom + viewport.x;
+  const worldY = topLeftY * viewport.zoom + viewport.y;
   
   // Add canvas container offset and account for textarea styling (border + padding)
   const textareaBoxOffset = 6; // border (2px) + padding (4px)
