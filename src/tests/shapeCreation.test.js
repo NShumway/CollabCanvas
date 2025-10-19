@@ -14,7 +14,7 @@ describe('Shape Creation - Business Logic Integrity', () => {
   
   describe('Rectangle Creation', () => {
     it('should create rectangle with minimal parameters', () => {
-      const result = createShape('rectangle', 100, 200, 'user-123');
+      const result = createShape({ type: 'rectangle', x: 100, y: 200, userId: 'user-123', maxZIndex: 0 });
       
       expect(result.type).toBe('rectangle');
       expect(result.x).toBe(100);
@@ -22,7 +22,7 @@ describe('Shape Creation - Business Logic Integrity', () => {
       expect(result.width).toBe(SHAPE_DEFAULTS.RECTANGLE_WIDTH);
       expect(result.height).toBe(SHAPE_DEFAULTS.RECTANGLE_HEIGHT);
       expect(result.fill).toBe(SHAPE_DEFAULTS.FILL);
-      expect(result.zIndex).toBe(SHAPE_DEFAULTS.Z_INDEX);
+      expect(result.zIndex).toBe(1); // maxZIndex (0) + 1
       expect(result.updatedBy).toBe('user-123');
       expect(result.clientTimestamp).toBeGreaterThan(0);
       expect(typeof result.id).toBe('string');
@@ -37,7 +37,7 @@ describe('Shape Creation - Business Logic Integrity', () => {
         zIndex: 10
       };
       
-      const result = createShape('rectangle', 50, 75, 'user-456', customProps);
+      const result = createShape({ type: 'rectangle', x: 50, y: 75, userId: 'user-456', maxZIndex: 0, ...customProps });
       
       expect(result.width).toBe(200); // Custom override
       expect(result.height).toBe(150); // Custom override
@@ -50,7 +50,7 @@ describe('Shape Creation - Business Logic Integrity', () => {
 
   describe('Ellipse Creation', () => {
     it('should create ellipse with correct defaults', () => {
-      const result = createShape('ellipse', 150, 250, 'user-789');
+      const result = createShape({ type: 'ellipse', x: 150, y: 250, userId: 'user-789', maxZIndex: 0 });
       
       expect(result.type).toBe('ellipse');
       expect(result.x).toBe(150);
@@ -67,7 +67,7 @@ describe('Shape Creation - Business Logic Integrity', () => {
         fill: '#ellipse-blue'
       };
       
-      const result = createShape('ellipse', 0, 0, 'user-ellipse', customProps);
+      const result = createShape({ type: 'ellipse', x: 0, y: 0, userId: 'user-ellipse', maxZIndex: 0, ...customProps });
       
       expect(result.width).toBe(300);
       expect(result.height).toBe(100);
@@ -78,7 +78,7 @@ describe('Shape Creation - Business Logic Integrity', () => {
 
   describe('Text Creation', () => {
     it('should create text with all text defaults', () => {
-      const result = createShape('text', 75, 125, 'user-text');
+      const result = createShape({ type: 'text', x: 75, y: 125, userId: 'user-text', maxZIndex: 0 });
       
       expect(result.type).toBe('text');
       expect(result.x).toBe(75);
@@ -102,7 +102,7 @@ describe('Shape Creation - Business Logic Integrity', () => {
         fill: '#text-green'
       };
       
-      const result = createShape('text', 10, 20, 'user-custom', customProps);
+      const result = createShape({ type: 'text', x: 10, y: 20, userId: 'user-custom', maxZIndex: 0, ...customProps });
       
       expect(result.text).toBe('Custom Message');
       expect(result.fontSize).toBe(24);
@@ -118,19 +118,19 @@ describe('Shape Creation - Business Logic Integrity', () => {
     it('should handle invalid shape type gracefully', () => {
       // This should throw or return null, preventing runtime errors
       expect(() => {
-        createShape('invalid-type', 0, 0, 'user-123');
+        createShape({ type: 'invalid-type', x: 0, y: 0, userId: 'user-123', maxZIndex: 0 });
       }).toThrow();
     });
 
     it('should handle missing user ID', () => {
-      const result = createShape('rectangle', 0, 0, '');
+      const result = createShape({ type: 'rectangle', x: 0, y: 0, userId: '', maxZIndex: 0 });
       
-      expect(result.updatedBy).toBe(''); // Should handle empty string
+      expect(result.updatedBy).toBe('unknown'); // Falls back to 'unknown' for empty userId
       expect(result.type).toBe('rectangle'); // Should still create shape
     });
 
     it('should handle negative coordinates', () => {
-      const result = createShape('ellipse', -100, -200, 'user-negative');
+      const result = createShape({ type: 'ellipse', x: -100, y: -200, userId: 'user-negative', maxZIndex: 0 });
       
       expect(result.x).toBe(-100); // Should allow negative coordinates
       expect(result.y).toBe(-200); // Should allow negative coordinates
@@ -143,7 +143,7 @@ describe('Shape Creation - Business Logic Integrity', () => {
         height: 0
       };
       
-      const result = createShape('rectangle', 0, 0, 'user-zero', customProps);
+      const result = createShape({ type: 'rectangle', x: 0, y: 0, userId: 'user-zero', maxZIndex: 0, ...customProps });
       
       expect(result.width).toBe(0); // Should respect custom values even if zero
       expect(result.height).toBe(0); // Should respect custom values even if zero
@@ -152,9 +152,9 @@ describe('Shape Creation - Business Logic Integrity', () => {
 
   describe('Shape ID Generation', () => {
     it('should generate unique IDs for multiple shapes', () => {
-      const shape1 = createShape('rectangle', 0, 0, 'user-1');
-      const shape2 = createShape('rectangle', 0, 0, 'user-1');
-      const shape3 = createShape('ellipse', 0, 0, 'user-1');
+      const shape1 = createShape({ type: 'rectangle', x: 0, y: 0, userId: 'user-1', maxZIndex: 0 });
+      const shape2 = createShape({ type: 'rectangle', x: 0, y: 0, userId: 'user-1', maxZIndex: 0 });
+      const shape3 = createShape({ type: 'ellipse', x: 0, y: 0, userId: 'user-1', maxZIndex: 0 });
       
       expect(shape1.id).not.toBe(shape2.id);
       expect(shape2.id).not.toBe(shape3.id);
@@ -170,20 +170,20 @@ describe('Shape Creation - Business Logic Integrity', () => {
   describe('Timestamp Generation', () => {
     it('should generate current timestamps', () => {
       const beforeTime = Date.now();
-      const result = createShape('rectangle', 0, 0, 'user-time');
+      const result = createShape({ type: 'rectangle', x: 0, y: 0, userId: 'user-time', maxZIndex: 0 });
       const afterTime = Date.now();
       
       expect(result.clientTimestamp).toBeGreaterThanOrEqual(beforeTime);
       expect(result.clientTimestamp).toBeLessThanOrEqual(afterTime);
     });
 
-    it('should generate different timestamps for shapes created at different times', () => {
-      const shape1 = createShape('rectangle', 0, 0, 'user-1');
+    it('should generate different timestamps for shapes created at different times', async () => {
+      const shape1 = createShape({ type: 'rectangle', x: 0, y: 0, userId: 'user-1', maxZIndex: 0 });
       
       // Small delay to ensure different timestamps
       await new Promise(resolve => setTimeout(resolve, 1));
       
-      const shape2 = createShape('rectangle', 0, 0, 'user-1');
+      const shape2 = createShape({ type: 'rectangle', x: 0, y: 0, userId: 'user-1', maxZIndex: 0 });
       
       expect(shape2.clientTimestamp).toBeGreaterThan(shape1.clientTimestamp);
     });

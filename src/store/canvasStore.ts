@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { CanvasStore, Shape } from '@/types';
+import { getOptimalSelectionColor } from '@/utils/colorContrast';
 
 const useCanvasStore = create<CanvasStore>((set, get) => ({
   // Canvas shapes
@@ -33,6 +34,9 @@ const useCanvasStore = create<CanvasStore>((set, get) => ({
   
   // Create mode state
   createMode: null, // null | 'rectangle' | 'ellipse' | 'text' etc.
+  
+  // Dynamic selection color (adapts to selected shape colors for visibility)
+  selectionColor: '#3B82F6', // Default blue, adapts when conflicts occur
   
   // Shape actions
   setShapes: (shapes) => set({ 
@@ -83,6 +87,20 @@ const useCanvasStore = create<CanvasStore>((set, get) => ({
     };
   }),
   
+  // Helper function to update selection color based on selected shapes
+  updateSelectionColor: () => {
+    const state = get();
+    const shapeColors = state.selectedIds
+      .map(id => state.shapes[id]?.fill)
+      .filter((color): color is string => Boolean(color)); // Type-safe filter for defined colors
+    
+    const optimalColor = getOptimalSelectionColor(shapeColors);
+    
+    if (optimalColor !== state.selectionColor) {
+      set({ selectionColor: optimalColor });
+    }
+  },
+
   // Selection actions
   setSelectedIds: (ids) => {
     const idsArray = Array.isArray(ids) ? ids : [ids];
@@ -90,6 +108,9 @@ const useCanvasStore = create<CanvasStore>((set, get) => ({
       selectedIds: idsArray,
       selectedIdsSet: new Set(idsArray) 
     });
+    
+    // Update selection color based on new selection
+    get().updateSelectionColor();
   },
   
   addSelectedId: (id: string) => set((state) => {
@@ -108,47 +129,67 @@ const useCanvasStore = create<CanvasStore>((set, get) => ({
     };
   }),
   
-  clearSelection: () => set({ 
-    selectedIds: [],
-    selectedIdsSet: new Set()
-  }),
+  clearSelection: () => {
+    set({ 
+      selectedIds: [],
+      selectedIdsSet: new Set()
+    });
+    
+    // Reset to default selection color when no shapes selected
+    get().updateSelectionColor();
+  },
   
   // Multi-select helper actions
-  addToSelection: (id: string) => set((state) => {
+  addToSelection: (id: string) => {
+    const state = get();
+    
     // O(1) set operation instead of O(n) array recreation
-    if (state.selectedIdsSet.has(id)) return state; // Already selected
+    if (state.selectedIdsSet.has(id)) return; // Already selected
     
     const newIds = [...state.selectedIds, id];
     const newSet = new Set(state.selectedIdsSet);
     newSet.add(id);
     
-    return { 
+    set({ 
       selectedIds: newIds,
       selectedIdsSet: newSet
-    };
-  }),
+    });
+    
+    // Update selection color based on new selection
+    get().updateSelectionColor();
+  },
   
-  removeFromSelection: (id: string) => set((state) => {
+  removeFromSelection: (id: string) => {
+    const state = get();
+    
     // O(1) set operation instead of O(n) array recreation
-    if (!state.selectedIdsSet.has(id)) return state; // No change needed
+    if (!state.selectedIdsSet.has(id)) return; // No change needed
     
     const newIds = state.selectedIds.filter(selectedId => selectedId !== id);
     const newSet = new Set(state.selectedIdsSet);
     newSet.delete(id);
     
-    return {
+    set({
       selectedIds: newIds,
       selectedIdsSet: newSet
-    };
-  }),
+    });
+    
+    // Update selection color based on new selection
+    get().updateSelectionColor();
+  },
   
-  selectAll: () => set((state) => {
+  selectAll: () => {
+    const state = get();
     const allIds = Object.keys(state.shapes);
-    return {
+    
+    set({
       selectedIds: allIds,
       selectedIdsSet: new Set(allIds)
-    };
-  }),
+    });
+    
+    // Update selection color based on all selected shapes
+    get().updateSelectionColor();
+  },
   
   // Batch operations for selected shapes
   deleteSelectedShapes: () => set((state) => {
@@ -168,17 +209,42 @@ const useCanvasStore = create<CanvasStore>((set, get) => ({
     const newSelectedIds: string[] = [];
     const DUPLICATE_OFFSET = 20; // px offset for duplicated shapes
     
+    // Helper to find insertion z-index above original (fractional approach)
+    const findInsertionZIndex = (originalZIndex: number, allShapes: Record<string, Shape>): number => {
+      const allZIndices = Object.values(allShapes).map(s => s.zIndex || 0);
+      const targetZIndex = originalZIndex + 1;
+      
+      // Check if simple +1 works (no collision)
+      if (!allZIndices.includes(targetZIndex)) {
+        return targetZIndex;
+      }
+      
+      // Find the next z-index above our target
+      const sorted = allZIndices.filter(z => z > originalZIndex).sort((a, b) => a - b);
+      const nextZIndex = sorted[0];
+      
+      if (!nextZIndex) {
+        // No shapes above us, just use +1
+        return targetZIndex;
+      }
+      
+      // Insert fractionally between original and next
+      return (originalZIndex + nextZIndex) / 2;
+    };
+    
     state.selectedIds.forEach(id => {
       const originalShape = state.shapes[id];
       if (originalShape) {
         const newId = crypto.randomUUID();
         const now = Date.now();
+        const availableZIndex = findInsertionZIndex(originalShape.zIndex || 0, newShapes);
+        
         const duplicatedShape: Shape = {
           ...originalShape,
           id: newId,
           x: originalShape.x + DUPLICATE_OFFSET,
           y: originalShape.y + DUPLICATE_OFFSET,
-          zIndex: (originalShape.zIndex || 0) + 1, // Place duplicates on top
+          zIndex: availableZIndex, // Use collision-free z-index
           // ✅ Reset timestamps for new shape
           updatedAt: now,
           createdBy: state.currentUser?.uid || 'unknown',
@@ -236,12 +302,31 @@ const useCanvasStore = create<CanvasStore>((set, get) => ({
     const shape = state.shapes[shapeId];
     if (!shape) return state;
     
+    const allZIndices = Object.values(state.shapes).map(s => s.zIndex || 0);
+    const currentZIndex = shape.zIndex || 0;
+    const targetZIndex = currentZIndex + 1;
+    
+    // Try simple +1 first (most common case)
+    let newZIndex = targetZIndex;
+    
+    // If collision, use fractional insertion
+    if (allZIndices.includes(targetZIndex)) {
+      const sorted = allZIndices.filter(z => z > currentZIndex).sort((a, b) => a - b);
+      const nextZIndex = sorted[0];
+      
+      if (nextZIndex) {
+        // Insert between current and next
+        newZIndex = (currentZIndex + nextZIndex) / 2;
+      }
+      // If no next shape, simple +1 is fine (collision was false positive)
+    }
+    
     return {
       shapes: {
         ...state.shapes,
         [shapeId]: {
           ...shape,
-          zIndex: (shape.zIndex || 0) + 1,
+          zIndex: newZIndex,
           updatedBy: state.currentUser?.uid || 'unknown',
         },
       },
@@ -252,12 +337,31 @@ const useCanvasStore = create<CanvasStore>((set, get) => ({
     const shape = state.shapes[shapeId];
     if (!shape) return state;
     
+    const allZIndices = Object.values(state.shapes).map(s => s.zIndex || 0);
+    const currentZIndex = shape.zIndex || 0;
+    const targetZIndex = currentZIndex - 1;
+    
+    // Try simple -1 first (most common case)
+    let newZIndex = targetZIndex;
+    
+    // If collision, use fractional insertion
+    if (allZIndices.includes(targetZIndex)) {
+      const sorted = allZIndices.filter(z => z < currentZIndex).sort((a, b) => b - a);
+      const prevZIndex = sorted[0];
+      
+      if (prevZIndex !== undefined) {
+        // Insert between previous and current
+        newZIndex = (prevZIndex + currentZIndex) / 2;
+      }
+      // If no previous shape, simple -1 is fine
+    }
+    
     return {
       shapes: {
         ...state.shapes,
         [shapeId]: {
           ...shape,
-          zIndex: (shape.zIndex || 0) - 1,
+          zIndex: newZIndex,
           updatedBy: state.currentUser?.uid || 'unknown',
         },
       },

@@ -5,13 +5,15 @@ import { SHAPE_DEFAULTS } from '@/utils/shapeDefaults';
 
 const Shape = React.memo(({ shape }) => {
   const selectedIdsSet = useCanvasStore(state => state.selectedIdsSet); // Only subscribe to selection
+  const selectionColor = useCanvasStore(state => state.selectionColor); // Dynamic selection color
   
   const isSelected = selectedIdsSet.has(shape.id); // O(1) instead of O(n)
   
   // Default shape styles (Figma-like) - consistent across all shapes
+  // Uses dynamic selection color that adapts to avoid conflicts with shape colors
   const baseStyle = {
     fill: shape.fill ?? SHAPE_DEFAULTS.FILL,
-    stroke: isSelected ? SHAPE_DEFAULTS.SELECTION_COLOR : 'transparent',
+    stroke: isSelected ? selectionColor : 'transparent',
     strokeWidth: isSelected ? SHAPE_DEFAULTS.SELECTION_STROKE_WIDTH : 0,
   };
   

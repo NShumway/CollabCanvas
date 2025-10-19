@@ -23,6 +23,7 @@ const ColorPicker = ({ isOpen, onClose, position = { x: 0, y: 0 } }) => {
   const currentUser = useCanvasStore(state => state.currentUser);
   const selectedIds = useCanvasStore(state => state.selectedIds);
   const updateShape = useCanvasStore(state => state.updateShape);
+  const updateSelectionColor = useCanvasStore(state => state.updateSelectionColor);
   
   // Initialize sync engine for color updates
   useEffect(() => {
@@ -98,6 +99,12 @@ const ColorPicker = ({ isOpen, onClose, position = { x: 0, y: 0 } }) => {
     addToRecentColors(color);
     
     selectedIds.forEach(shapeId => {
+      // Get complete shape from store first
+      const currentShapes = useCanvasStore.getState().shapes;
+      const existingShape = currentShapes[shapeId];
+      
+      if (!existingShape) return; // Skip if shape doesn't exist
+      
       const updateData = { 
         fill: color,
         updatedBy: currentUser?.uid || 'unknown',
@@ -107,12 +114,16 @@ const ColorPicker = ({ isOpen, onClose, position = { x: 0, y: 0 } }) => {
       // Update local state immediately
       updateShape(shapeId, updateData);
       
-      // Sync to Firestore
+      // Sync to Firestore with complete shape
       if (syncEngineRef.current) {
         syncEngineRef.current.applyLocalChange(shapeId, updateData);
-        syncEngineRef.current.queueWrite(shapeId, updateData, false);
+        syncEngineRef.current.queueWrite(shapeId, { ...existingShape, ...updateData }, true);
       }
     });
+    
+    // Update selection color based on new colors to ensure visibility
+    // This prevents the highlight from blending with the new shape colors
+    updateSelectionColor();
     
     onClose();
   };

@@ -13,13 +13,14 @@ interface CreateShapeOptions {
   y: number;
   userId: string;
   maxZIndex: number;
+  [key: string]: any; // Allow custom properties
 }
 
 /**
  * Create a new shape with consistent defaults and metadata
  * Eliminates the massive code duplication in Canvas.jsx
  */
-export const createShape = ({ type, x, y, userId, maxZIndex }: CreateShapeOptions): Shape => {
+export const createShape = ({ type, x, y, userId, maxZIndex, ...customProps }: CreateShapeOptions): Shape => {
   const now = Date.now();
   const baseShape = {
     id: crypto.randomUUID(),
@@ -32,31 +33,32 @@ export const createShape = ({ type, x, y, userId, maxZIndex }: CreateShapeOption
     createdBy: userId || 'unknown',
     updatedBy: userId || 'unknown',
     clientTimestamp: now,
+    ...customProps, // Apply custom properties
   };
 
   switch (type) {
     case 'rectangle':
       return {
-        ...baseShape,
+        ...SHAPE_CREATION_DEFAULTS.rectangle, // Defaults first
+        ...baseShape,                        // Custom props override defaults  
         type: 'rectangle',
-        ...SHAPE_CREATION_DEFAULTS.rectangle,
       } as Shape;
 
     case 'ellipse':
       return {
-        ...baseShape,
-        type: 'ellipse',
-        width: SHAPE_DEFAULTS.ELLIPSE_WIDTH,
+        width: SHAPE_DEFAULTS.ELLIPSE_WIDTH,    // Defaults first
         height: SHAPE_DEFAULTS.ELLIPSE_HEIGHT,
+        ...baseShape,                           // Custom props override defaults
+        type: 'ellipse',
       };
 
     // Removed: line case (line shapes eliminated)
 
     case 'text':
       return {
-        ...baseShape,
+        ...SHAPE_CREATION_DEFAULTS.text,   // Defaults first
+        ...baseShape,                      // Custom props override defaults
         type: 'text',
-        ...SHAPE_CREATION_DEFAULTS.text,
       } as Shape;
 
     default:

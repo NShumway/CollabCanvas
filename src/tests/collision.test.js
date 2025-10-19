@@ -308,7 +308,7 @@ describe('Shape Collision Detection - User Interaction Critical', () => {
         x: 75,
         y: 75,
         width: 50,
-        height: 20,
+        height: 50, // Increased height to cover (100, 100)
         zIndex: 2
       }
     ];

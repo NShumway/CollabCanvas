@@ -44,6 +44,7 @@ export interface CanvasStoreState {
   // UI state
   isLoading: boolean;
   createMode: CreateMode;
+  selectionColor: string;
   
   // Future AI state (for upcoming PRs)
   // aiCommands: Record<string, AICommand>;
@@ -102,6 +103,9 @@ export interface CanvasStoreActions {
   // Create mode actions
   setCreateMode: (mode: CreateMode) => void;
   clearCreateMode: () => void;
+  
+  // Dynamic selection color actions
+  updateSelectionColor: () => void;
   
   // Sync tracking actions (Tier 2)
   addPendingWrite: (shapeId: string, timestamp?: number) => void;

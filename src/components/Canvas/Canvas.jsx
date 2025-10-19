@@ -225,11 +225,17 @@ const Canvas = () => {
   }, []);
   
   // Handle keyboard shortcuts (Figma-style)
+  // Z-Index shortcuts:
+  // - Ctrl+] = Bring Forward (one step)
+  // - Ctrl+} = Bring to Front (all the way) [Shift+]]
+  // - Ctrl+[ = Send Backward (one step)
+  // - Ctrl+{ = Send to Back (all the way) [Shift+[]
   useEffect(() => {
     const handleKeyDown = (e) => {
       // Check if user is typing in an input field
       const isTyping = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.contentEditable === 'true';
       if (isTyping) return;
+      
       
       // Space key for panning (like Figma)
       if (e.code === 'Space' && !isSpacePressed) {
@@ -320,18 +326,40 @@ const Canvas = () => {
         clearCreateMode();
       }
       
-      // Ctrl+] - Bring forward
-      if ((e.ctrlKey || e.metaKey) && e.key === ']') {
+      // Ctrl+} - Bring to Front (all the way) - Shift+] produces }
+      if ((e.ctrlKey || e.metaKey) && e.key === '}') {
         if (selectedIds.length > 0) {
           e.preventDefault();
+          const maxZIndex = Math.max(0, ...Object.values(shapes).map(s => s.zIndex || 0));
           selectedIds.forEach(shapeId => {
             // Apply locally first
-            bringForward(shapeId);
+            bringToFront(shapeId);
             // Sync via SyncEngine
             const updatedShape = shapes[shapeId];
             if (updatedShape && syncEngineRef.current) {
               const updateData = { 
-                zIndex: (updatedShape.zIndex || 0) + 1,
+                zIndex: maxZIndex + 1,
+                updatedBy: currentUser?.uid || 'unknown',
+                clientTimestamp: Date.now()
+              };
+              syncEngineRef.current.applyLocalChange(shapeId, updateData);
+              syncEngineRef.current.queueWrite(shapeId, { ...updatedShape, ...updateData }, true);
+            }
+          });
+        }
+      }
+      // Ctrl+] - Bring forward (one step)
+      else if ((e.ctrlKey || e.metaKey) && e.key === ']') {
+        if (selectedIds.length > 0) {
+          e.preventDefault();
+          selectedIds.forEach(shapeId => {
+            // Apply locally first (store handles collision detection)
+            bringForward(shapeId);
+            // Get updated shape with collision-free z-index
+            const updatedShape = useCanvasStore.getState().shapes[shapeId];
+            if (updatedShape && syncEngineRef.current) {
+              const updateData = { 
+                zIndex: updatedShape.zIndex,
                 updatedBy: currentUser?.uid || 'unknown',
                 clientTimestamp: Date.now()
               };
@@ -342,18 +370,40 @@ const Canvas = () => {
         }
       }
       
-      // Ctrl+[ - Send backward  
-      if ((e.ctrlKey || e.metaKey) && e.key === '[') {
+      // Ctrl+{ - Send to Back (all the way) - Shift+[ produces {
+      if ((e.ctrlKey || e.metaKey) && e.key === '{') {
         if (selectedIds.length > 0) {
           e.preventDefault();
+          const minZIndex = Math.min(0, ...Object.values(shapes).map(s => s.zIndex || 0));
           selectedIds.forEach(shapeId => {
             // Apply locally first
-            sendBackward(shapeId);
+            sendToBack(shapeId);
             // Sync via SyncEngine
             const updatedShape = shapes[shapeId];
             if (updatedShape && syncEngineRef.current) {
               const updateData = { 
-                zIndex: (updatedShape.zIndex || 0) - 1,
+                zIndex: minZIndex - 1,
+                updatedBy: currentUser?.uid || 'unknown',
+                clientTimestamp: Date.now()
+              };
+              syncEngineRef.current.applyLocalChange(shapeId, updateData);
+              syncEngineRef.current.queueWrite(shapeId, { ...updatedShape, ...updateData }, true);
+            }
+          });
+        }
+      }
+      // Ctrl+[ - Send backward (one step)  
+      else if ((e.ctrlKey || e.metaKey) && e.key === '[') {
+        if (selectedIds.length > 0) {
+          e.preventDefault();
+          selectedIds.forEach(shapeId => {
+            // Apply locally first (store handles collision detection)
+            sendBackward(shapeId);
+            // Get updated shape with collision-free z-index
+            const updatedShape = useCanvasStore.getState().shapes[shapeId];
+            if (updatedShape && syncEngineRef.current) {
+              const updateData = { 
+                zIndex: updatedShape.zIndex,
                 updatedBy: currentUser?.uid || 'unknown',
                 clientTimestamp: Date.now()
               };
@@ -777,11 +827,13 @@ const Canvas = () => {
         onWheel={handleWheel}
         onMouseDown={handleStageMouseDown}
         onMouseUp={handleStageMouseUp}
+        tabIndex={0} // Make Stage focusable for keyboard events
         style={{ 
           cursor: isSpacePressed ? 'grab' : 
                   isDraggingShapes ? 'grabbing' :
                   createMode ? 'crosshair' : 
-                  isSelecting ? 'crosshair' : 'default'
+                  isSelecting ? 'crosshair' : 'default',
+          outline: 'none' // Remove focus outline for better UX
         }}
       >
         {/* Background Layer */}

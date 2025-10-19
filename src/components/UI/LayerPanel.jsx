@@ -42,39 +42,37 @@ const LayerPanel = () => {
     
     if (!shape || !syncEngine) return;
 
-    let newZIndex;
-    
-    // Apply action locally first
+    // Apply action locally first (store handles collision detection)
     switch (action) {
       case 'front':
         bringToFront(shapeId);
-        newZIndex = Math.max(0, ...Object.values(shapes).map(s => s.zIndex || 0)) + 1;
         break;
       case 'back':
         sendToBack(shapeId);
-        newZIndex = Math.min(0, ...Object.values(shapes).map(s => s.zIndex || 0)) - 1;
         break;
       case 'forward':
         bringForward(shapeId);
-        newZIndex = (shape.zIndex || 0) + 1;
         break;
       case 'backward':
         sendBackward(shapeId);
-        newZIndex = (shape.zIndex || 0) - 1;
         break;
       default:
         return;
     }
     
+    // Get updated shape with collision-free z-index from store
+    const updatedShape = useCanvasStore.getState().shapes[shapeId];
+    if (!updatedShape) return;
+    
     // Sync via SyncEngine
     try {
       const updateData = { 
-        zIndex: newZIndex,
+        zIndex: updatedShape.zIndex, // Use collision-free z-index from store
         updatedBy: shape.updatedBy,
         clientTimestamp: Date.now()
       };
       syncEngine.applyLocalChange(shapeId, updateData);
-      syncEngine.queueWrite(shapeId, { ...shape, ...updateData }, true);
+      syncEngine.queueWrite(shapeId, { ...updatedShape, ...updateData }, true);
     } catch (error) {
       console.warn('Failed to sync z-index change:', error);
     }

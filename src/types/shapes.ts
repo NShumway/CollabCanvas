@@ -149,33 +149,44 @@ export interface ShapeBounds {
 export const getShapeBounds = (shape: Shape): ShapeBounds => {
   switch (shape.type) {
     case 'rectangle': {
+      const x = shape.x ?? 0;
+      const y = shape.y ?? 0;
+      const width = shape.width ?? SHAPE_DEFAULTS.RECTANGLE_WIDTH;
+      const height = shape.height ?? SHAPE_DEFAULTS.RECTANGLE_HEIGHT;
       return {
-        left: shape.x,
-        top: shape.y,
-        right: shape.x + shape.width,
-        bottom: shape.y + shape.height,
-        width: shape.width,
-        height: shape.height,
+        left: x,
+        top: y,
+        right: x + width,
+        bottom: y + height,
+        width,
+        height,
       };
     }
     case 'ellipse': {
+      const x = shape.x ?? 0;
+      const y = shape.y ?? 0;
+      const width = shape.width ?? SHAPE_DEFAULTS.ELLIPSE_WIDTH;
+      const height = shape.height ?? SHAPE_DEFAULTS.ELLIPSE_HEIGHT;
       return {
-        left: shape.x,
-        top: shape.y,
-        right: shape.x + shape.width,
-        bottom: shape.y + shape.height,
-        width: shape.width,
-        height: shape.height,
+        left: x,
+        top: y,
+        right: x + width,
+        bottom: y + height,
+        width,
+        height,
       };
     }
     case 'text': {
+      const x = shape.x ?? 0;
+      const y = shape.y ?? 0;
       const width = shape.width ?? SHAPE_DEFAULTS.TEXT_WIDTH;
-      const height = shape.height ?? shape.fontSize * 1.2; // Approximate height based on font size
+      const fontSize = shape.fontSize ?? SHAPE_DEFAULTS.TEXT_FONT_SIZE;
+      const height = shape.height ?? fontSize * 1.2; // Approximate height based on font size
       return {
-        left: shape.x,
-        top: shape.y,
-        right: shape.x + width,
-        bottom: shape.y + height,
+        left: x,
+        top: y,
+        right: x + width,
+        bottom: y + height,
         width,
         height,
       };

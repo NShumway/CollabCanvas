@@ -179,12 +179,12 @@ export const convertToFirestoreShape = (shape: Shape): Partial<FirestoreShapeDoc
     case 'text':
       return {
         ...baseData,
-        text: shape.text,
-        fontSize: shape.fontSize,
-        fontFamily: shape.fontFamily,
-        textAlign: shape.textAlign,
-        ...(shape.width !== undefined && { width: shape.width }),
-        ...(shape.height !== undefined && { height: shape.height }),
+        text: shape.text ?? SHAPE_DEFAULTS.TEXT_CONTENT,
+        fontSize: shape.fontSize ?? SHAPE_DEFAULTS.TEXT_FONT_SIZE,
+        fontFamily: shape.fontFamily ?? SHAPE_DEFAULTS.TEXT_FONT_FAMILY,
+        textAlign: shape.textAlign ?? SHAPE_DEFAULTS.TEXT_ALIGN,
+        width: shape.width ?? SHAPE_DEFAULTS.TEXT_WIDTH,
+        height: shape.height ?? SHAPE_DEFAULTS.TEXT_HEIGHT,
       };
   }
 };

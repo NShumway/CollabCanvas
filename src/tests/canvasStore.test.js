@@ -128,7 +128,7 @@ describe('Canvas Store - Multi-Select & Operations', () => {
       
       expect(duplicatedShape).toBeDefined();
       expect(duplicatedShape.fill).toBe('#red');
-      expect(duplicatedShape.zIndex).toBe(2); // Original zIndex (1) + 1
+      expect(duplicatedShape.zIndex).toBe(1.5); // Fractional insertion between 1 and 2
     });
 
     it('should duplicate multiple selected shapes', () => {
@@ -166,14 +166,14 @@ describe('Canvas Store - Multi-Select & Operations', () => {
       const originalZIndex = store.getState().shapes.shape2.zIndex;
       store.getState().bringForward('shape2');
       
-      expect(store.getState().shapes.shape2.zIndex).toBe(originalZIndex + 1);
+      expect(store.getState().shapes.shape2.zIndex).toBe(2.5); // Fractional insertion between 2 and 3
     });
 
     it('should send shape backward', () => {
       const originalZIndex = store.getState().shapes.shape2.zIndex;
       store.getState().sendBackward('shape2');
       
-      expect(store.getState().shapes.shape2.zIndex).toBe(originalZIndex - 1);
+      expect(store.getState().shapes.shape2.zIndex).toBe(1.5); // Fractional insertion between 1 and 2
     });
 
     it('should handle z-index operations on non-existent shapes', () => {
