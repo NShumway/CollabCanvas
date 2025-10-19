@@ -11,6 +11,7 @@ interface LoggingConfig {
   readonly sync: boolean;           // Firestore sync operations
   readonly performance: boolean;    // Performance-related logs
   readonly userInteractions: boolean; // Mouse/keyboard interactions
+  readonly ai: boolean;            // AI operations and tool execution
   readonly errors: boolean;         // Always log errors
   readonly warnings: boolean;       // Always log warnings
 }
@@ -28,6 +29,7 @@ const LOGGING_CONFIG: LoggingConfig = {
   sync: false,
   performance: false,
   userInteractions: false,
+  ai: true,            // Enable AI logging for development
   errors: true,
   warnings: true,
 };
@@ -53,6 +55,12 @@ export const devLog = {
   interaction: (...args: unknown[]): void => {
     if (LOGGING_CONFIG.userInteractions && isDev()) {
       console.log('[INTERACTION]', ...args);
+    }
+  },
+  
+  ai: (...args: unknown[]): void => {
+    if (LOGGING_CONFIG.ai && isDev()) {
+      console.log('[AI]', ...args);
     }
   },
   

@@ -7,11 +7,39 @@ import OnlineUsers from './components/UI/OnlineUsers';
 import ConnectionStatus from './components/UI/ConnectionStatus';
 import LayerPanel from './components/UI/LayerPanel';
 import PerformanceMonitor from './components/UI/PerformanceMonitor';
+import ChatPanel from './components/UI/ChatPanel';
 import { useConnectionState } from '@/hooks/useConnectionState';
+import { useState, useEffect } from 'react';
 
 function App() {
   // Initialize connection state monitoring
   useConnectionState();
+  
+  // AI Chat Panel state
+  const [isChatVisible, setIsChatVisible] = useState(false);
+  
+  // Global Ctrl+K keyboard shortcut for AI chat
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ctrl+K (or Cmd+K on Mac) to toggle AI chat
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsChatVisible(true); // Always open on Ctrl+K
+      }
+      
+      // Escape to close chat
+      if (e.key === 'Escape' && isChatVisible) {
+        setIsChatVisible(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isChatVisible]);
+  
+  const toggleChatVisibility = () => {
+    setIsChatVisible(prev => !prev);
+  };
   
   return (
     <AuthGuard>
@@ -31,15 +59,15 @@ function App() {
         <Toolbar />
 
         {/* Main Content */}
-        <div className="flex-1 flex">
+        <div className="flex-1 flex overflow-hidden">
           {/* Left Sidebar */}
-          <aside className="w-64 bg-gray-800 border-r border-gray-700 p-4 space-y-4">
+          <aside className="w-64 bg-gray-800 border-r border-gray-700 p-4 space-y-4 flex-shrink-0">
             <LayerPanel />
             <OnlineUsers />
           </aside>
           
-          {/* Canvas Area */}
-          <main className="flex-1 relative">
+          {/* Canvas Area - Takes remaining space automatically */}
+          <main className="flex-1 relative bg-gray-900 overflow-hidden">
             <Canvas />
             
             {/* Dev Performance Monitor */}
@@ -47,6 +75,12 @@ function App() {
               <PerformanceMonitor />
             )}
           </main>
+          
+          {/* AI Chat Panel - Always rendered, handles own visibility */}
+          <ChatPanel 
+            isVisible={isChatVisible} 
+            onToggleVisibility={toggleChatVisibility}
+          />
         </div>
       </div>
     </AuthGuard>

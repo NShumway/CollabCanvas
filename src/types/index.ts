@@ -143,6 +143,15 @@ export {
   COLORS,
 } from './ui';
 
+// AI integration types
+export type {
+  CanvasContext,
+  AIToolCall,
+  OpenAIResponse,
+  ToolExecutionResult,
+  RateLimitStatus
+} from './ai';
+
 // Utility types for common patterns
 export type Nullable<T> = T | null;
 export type Optional<T> = T | undefined;

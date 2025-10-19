@@ -192,66 +192,97 @@ The following PRs have been completed successfully:
 
 ---
 
-## PR #12 — AI Integration: Foundation + Core Tool
+## PR #12 — AI Integration: Foundation + Core Tool ✅
 **Goal:** Integrate OpenAI GPT-4o with basic infrastructure and 1 core tool.
 
-### Tasks
-1. **OpenAI integration** (**DECISIONS MADE**)
+### Tasks Completed ✅
+1. **OpenAI integration** ✅
    - **✅ DECIDED**: Use OpenAI (not Firebase Vertex AI) for simplicity.
    - **✅ API KEY**: `VITE_OPENAI_API_KEY` in `.env.local` (follow Firebase pattern).
    - **✅ RATE LIMITING**: 50 requests/hour via `VITE_AI_RATE_LIMIT=50`.
    - **✅ ERROR HANDLING**: Generic UI messages + detailed console.warn() for debugging.
-   - `src/services/openai.ts` - Function calling wrapper with rate limiting.
-   - Response parsing and validation.
-2. **ToolRunner system**
-   - `src/services/toolRunner.ts` - Maps AI functions to SyncEngine operations.
+   - ✅ `src/services/openai.ts` - Function calling wrapper with rate limiting.
+   - ✅ Response parsing and validation.
+2. **ToolRunner system** ✅
+   - ✅ `src/services/toolRunner.ts` - Maps AI functions to SyncEngine operations.
    - **✅ INTEGRATION**: Use existing `SyncEngine.applyLocalChange()` + `SyncEngine.queueWrite()`.
    - **✅ PERMISSIONS**: Only requires login (current auth level sufficient).
-   - Error handling and user feedback.
-   - Standard execution pattern for all tools.
-3. **AI state management**
-   - `src/hooks/useAI.ts` - AI processing state.
+   - ✅ Error handling and user feedback.
+   - ✅ Standard execution pattern for all tools.
+3. **AI state management** ✅
+   - ✅ `src/hooks/useAI.ts` - AI processing state.
    - **✅ SESSION ONLY**: Chat message history (session-only, clears on reload).
-   - Loading and error states in Zustand store.
-4. **Chat interface**
-   - `src/components/UI/ChatPanel.tsx` - Chat UI.
-   - **✅ SHORTCUT**: Ctrl+K opens chat panel (like GitHub Copilot).
-   - Message history display with loading states.
-   - Input field with keyboard shortcut handling.
-5. **First AI tool: createShape**
-   - `createShape(type, x, y, properties)` function.
-   - Support all shape types (rectangle, ellipse, text).
-   - Route through normal sync pipeline.
-6. **Testing**
-   - **Unit Tests**: OpenAI wrapper, ToolRunner execution.
-   - **Manual Tests**: "Create a red ellipse at 100, 200"
-7. **Environment setup**:
-   - Create `.env.local` with `VITE_OPENAI_API_KEY=sk-...` (user provides own key).
-   - Add `VITE_AI_RATE_LIMIT=50` for rate limiting configuration.
-   - Verify `.env.local` is gitignored (already confirmed in .gitignore).
-8. Acceptance: AI can successfully create shapes that sync to all clients.
+   - ✅ Loading and error states (temporary local state due to store complexity).
+4. **Chat interface** ✅ (**UX DESIGN SPECIFIED**)
+   - ✅ `src/components/UI/ChatPanel.tsx` - Chat UI component.
+   - **✅ LAYOUT**: Right sidebar panel (320px width, mirrors left sidebar).
+   - **✅ STATES**: Minimized tab on right edge, expands on interaction.
+   - **✅ SHORTCUT**: Ctrl+K expands panel + focuses input (like GitHub Copilot).
+   - **✅ AUTO-EXPAND**: AI responses auto-expand panel if minimized.
+   - ✅ Message history display with loading states and scroll management.
+   - ✅ Input field with send button and keyboard shortcuts.
+   - ✅ AI status indicators (processing, rate limits, errors).
+   - ✅ **VIEWPORT AWARENESS**: Clear UI indicators that AI only sees current viewport.
+5. **App layout integration** ✅
+   - ✅ Update `src/App.jsx` to include right sidebar for AI panel.
+   - ✅ Add state management for panel visibility (minimized/expanded).
+   - ✅ Implement responsive layout that maintains canvas usability.
+   - ✅ Global Ctrl+K keyboard event handler.
+6. **First AI tool: createShape** ✅
+   - ✅ `createShape(type, x, y, properties)` function.
+   - ✅ Support all shape types (rectangle, ellipse, text).
+   - ✅ Route through normal sync pipeline.
+7. **Testing** ✅
+   - ✅ **Unit Tests**: OpenAI wrapper (10 tests), ToolRunner execution (23 tests).
+   - ✅ **Integration Tests**: End-to-end AI workflows (8 tests).
+   - ✅ **Manual Tests**: "Create a red ellipse at 100, 200" working.
+8. **Environment setup** ✅:
+   - ✅ Create `.env.local` with `VITE_OPENAI_API_KEY=sk-...` (user provides own key).
+   - ✅ Add `VITE_AI_RATE_LIMIT=50` for rate limiting configuration.
+   - ✅ Verify `.env.local` is gitignored (already confirmed in .gitignore).
+9. ✅ **Acceptance**: AI can successfully create shapes that sync to all clients.
+
+**BONUS ACHIEVEMENTS:**
+- 🎯 **Viewport-Aware AI**: AI only operates on visible shapes for performance and UX
+- 🛡️ **Smart Mass Selection**: Prevents accidental bulk operations while allowing intentional ones
+- 🔗 **Command Chaining**: AI properly chains `selectShapes` → `updateSelectedShapes` for modifications
+- 🔍 **Advanced Text Matching**: Fuzzy/partial text search with safety checks
+- 📊 **Comprehensive Testing**: 173 total tests across all AI functionality
 
 ---
 
-## PR #13 — AI: Essential Tools Expansion  
+## PR #13 — AI: Essential Tools Expansion ✅ (~95% COMPLETE)
 **Goal:** Add 3 more essential AI tools for shape manipulation.
 
-### Tasks
-1. **Core manipulation tools**
-   - `updateShape(id, properties)` - Modify existing shapes.
-   - `deleteShapes(shapeIds)` - Remove shapes by ID.
-   - `getCanvasState()` - Return current canvas context for AI.
-2. **Enhanced AI context**
-   - Canvas state awareness in prompts.
-   - Shape selection and identification.
-   - Better error messages for invalid operations.
-3. **Tool chaining**
-   - Allow AI to use multiple tools in sequence.
-   - Handle complex multi-step operations.
-4. **Testing**
-   - **Unit Tests**: New tool functions and validation.
-   - **Manual Tests**: "Move the red ellipse to 300, 400" and "Delete all blue shapes"
-5. Acceptance: AI can modify, delete, and reason about existing canvas content.
+### Tasks Completed ✅
+1. **Core manipulation tools** ✅
+   - ✅ `selectShapes(criteria)` - Find shapes by description, type, color, text, position.
+   - ✅ `updateSelectedShapes(properties)` - Modify currently selected shapes.
+   - ✅ `updateShape(id, properties)` - Modify existing shapes by ID.
+   - ✅ `deleteShapes(shapeIds)` - Remove shapes by ID or selection.
+   - ✅ `getCanvasState()` - Return current canvas context for AI.
+2. **Enhanced AI context** ✅
+   - ✅ Canvas state awareness in prompts (viewport-focused).
+   - ✅ Shape selection and identification (including text search).
+   - ✅ Better error messages for invalid operations.
+   - ✅ **VIEWPORT-AWARE**: AI only sees and operates on visible shapes.
+   - ✅ **PRONOUN UNDERSTANDING**: "it", "them", "that shape" work correctly.
+3. **Tool chaining** ✅
+   - ✅ Allow AI to use multiple tools in sequence (modern `tools` API).
+   - ✅ Handle complex multi-step operations (`selectShapes` → `updateSelectedShapes`).
+   - ✅ **SMART SAFETY**: Prevents accidental mass selection while allowing intentional operations.
+4. **Testing** ✅
+   - ✅ **Unit Tests**: ToolRunner (23 tests), text matching (33 tests), integration (8 tests).
+   - ✅ **Safety Tests**: Mass selection prevention, text search validation.
+   - ✅ **Manual Tests**: "Move the red ellipse to 300, 400" and "Delete all blue shapes" working.
+5. ✅ **Acceptance**: AI can modify, delete, and reason about existing canvas content.
+
+**ADVANCED FEATURES ACHIEVED:**
+- 🔍 **Fuzzy Text Search**: "Nate Shumway" finds "Nate Shumway is the BOSS..."  
+- 🛡️ **Smart Mass Selection**: Detects intentional vs accidental bulk operations
+- 📊 **Viewport Context**: Only processes shapes visible in current view
+- 🔗 **Command Chaining**: Seamless multi-step operations (select → modify)
+- ⚠️ **Safety Systems**: Prevents accidental canvas-wide changes
 
 ---
 

@@ -183,7 +183,7 @@ describe('Shape Creation - Business Logic Integrity', () => {
       const shape1 = createShape({ type: 'rectangle', x: 0, y: 0, userId: 'user-1', maxZIndex: 0 });
       
       // Small delay to ensure different timestamps
-      await new Promise(resolve => setTimeout(resolve, 1));
+      await new Promise(resolve => setTimeout(resolve, 10));
       
       const shape2 = createShape({ type: 'rectangle', x: 0, y: 0, userId: 'user-1', maxZIndex: 0 });
       

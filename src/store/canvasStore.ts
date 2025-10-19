@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { CanvasStore, Shape } from '@/types';
+import type { CanvasStore, Shape, AICommand, ChatMessage } from '@/types';
 import { getOptimalSelectionColor } from '@/utils/colorContrast';
 
 const useCanvasStore = create<CanvasStore>((set, get) => ({
@@ -44,6 +44,11 @@ const useCanvasStore = create<CanvasStore>((set, get) => ({
   
   // Transform state
   aspectLock: false, // Whether aspect ratio should be maintained during transforms
+  
+  // AI state
+  aiCommands: {},
+  chatMessages: [],
+  isAIProcessing: false,
   
   // Shape actions
   setShapes: (shapes) => set({ 
@@ -430,8 +435,47 @@ const useCanvasStore = create<CanvasStore>((set, get) => ({
   
   // Transform actions
   setAspectLock: (aspectLock: boolean) => set({ aspectLock }),
-  
+
   toggleAspectLock: () => set((state) => ({ aspectLock: !state.aspectLock })),
+
+  // AI actions
+  addChatMessage: (message: ChatMessage) => set((state) => ({
+    chatMessages: [...state.chatMessages, message]
+  })),
+
+  clearChatMessages: () => set({ chatMessages: [] }),
+
+  setAIProcessing: (isProcessing: boolean) => set({ isAIProcessing: isProcessing }),
+
+  addAICommand: (commandId: string, command: AICommand) => set((state) => ({
+    aiCommands: {
+      ...state.aiCommands,
+      [commandId]: command
+    }
+  })),
+
+  updateAICommand: (commandId: string, updates: Partial<AICommand>) => set((state) => {
+    const existingCommand = state.aiCommands[commandId];
+    if (!existingCommand) return state; // Don't update if command doesn't exist
+    
+    return {
+      aiCommands: {
+        ...state.aiCommands,
+        [commandId]: {
+          ...existingCommand,
+          ...updates
+        }
+      }
+    };
+  }),
+
+  removeAICommand: (commandId: string) => set((state) => {
+    const newCommands = { ...state.aiCommands };
+    delete newCommands[commandId];
+    return { aiCommands: newCommands };
+  }),
+
+  clearAICommands: () => set({ aiCommands: {} }),
   
   // Tier 2: Sync tracking actions - manage pending writes to prevent echo loops
   addPendingWrite: (shapeId: string, timestamp: number = Date.now()) => set((state) => ({
@@ -459,6 +503,7 @@ const useCanvasStore = create<CanvasStore>((set, get) => ({
   setConnectionState: (connectionState) => set({ connectionState }),
   
   setLastSyncTimestamp: (timestamp: number = Date.now()) => set({ lastSyncTimestamp: timestamp }),
+  
 }));
 
 export default useCanvasStore;

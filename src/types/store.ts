@@ -53,10 +53,10 @@ export interface CanvasStoreState {
   // Transform state
   aspectLock: boolean;
   
-  // Future AI state (for upcoming PRs)
-  // aiCommands: Record<string, AICommand>;
-  // chatMessages: ChatMessage[];
-  // aiProcessing: boolean;
+  // AI state (PR #12+)
+  aiCommands: Record<string, AICommand>;
+  chatMessages: ChatMessage[];
+  isAIProcessing: boolean;
   
   // Future features (for upcoming PRs)
   // clipboard: ClipboardState;
@@ -118,6 +118,8 @@ export interface CanvasStoreActions {
   // Transform actions
   setAspectLock: (aspectLock: boolean) => void;
   toggleAspectLock: () => void;
+  
+  // AI actions TEMPORARILY REMOVED - TODO: Add back when store issues resolved
   
   // Dynamic selection color actions
   updateSelectionColor: () => void;
@@ -197,6 +199,11 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
+  error?: boolean;          // Indicates if this message is an error
+  toolCalls?: Array<{       // AI function calls made in this message
+    name: string;
+    arguments: Record<string, any>;
+  }>;
 }
 
 // Comment system (for Comments PR)
