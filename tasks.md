@@ -196,23 +196,28 @@ The following PRs have been completed successfully:
 **Goal:** Integrate OpenAI GPT-4o with basic infrastructure and 1 core tool.
 
 ### Tasks
-1. **OpenAI integration** (**CONSIDER FIREBASE VERTEX AI**)
-   - **⚠️ EVALUATE**: Consider using Firebase's new Vertex AI integration instead of direct OpenAI API for better Firebase ecosystem integration.
-   - `src/services/openai.js` - Function calling wrapper.
-   - API key management and error handling.
+1. **OpenAI integration** (**DECISIONS MADE**)
+   - **✅ DECIDED**: Use OpenAI (not Firebase Vertex AI) for simplicity.
+   - **✅ API KEY**: `VITE_OPENAI_API_KEY` in `.env.local` (follow Firebase pattern).
+   - **✅ RATE LIMITING**: 50 requests/hour via `VITE_AI_RATE_LIMIT=50`.
+   - **✅ ERROR HANDLING**: Generic UI messages + detailed console.warn() for debugging.
+   - `src/services/openai.ts` - Function calling wrapper with rate limiting.
    - Response parsing and validation.
 2. **ToolRunner system**
-   - `src/services/toolRunner.js` - Maps AI functions to SyncEngine operations.
+   - `src/services/toolRunner.ts` - Maps AI functions to SyncEngine operations.
+   - **✅ INTEGRATION**: Use existing `SyncEngine.applyLocalChange()` + `SyncEngine.queueWrite()`.
+   - **✅ PERMISSIONS**: Only requires login (current auth level sufficient).
    - Error handling and user feedback.
    - Standard execution pattern for all tools.
 3. **AI state management**
-   - `src/hooks/useAI.js` - AI processing state.
-   - Chat message history (session-only).
-   - Loading and error states.
+   - `src/hooks/useAI.ts` - AI processing state.
+   - **✅ SESSION ONLY**: Chat message history (session-only, clears on reload).
+   - Loading and error states in Zustand store.
 4. **Chat interface**
-   - `src/components/UI/ChatPanel.jsx` - Chat UI.
-   - Message history display.
-   - Input field with keyboard shortcut (Ctrl+K).
+   - `src/components/UI/ChatPanel.tsx` - Chat UI.
+   - **✅ SHORTCUT**: Ctrl+K opens chat panel (like GitHub Copilot).
+   - Message history display with loading states.
+   - Input field with keyboard shortcut handling.
 5. **First AI tool: createShape**
    - `createShape(type, x, y, properties)` function.
    - Support all shape types (rectangle, ellipse, text).
@@ -220,7 +225,11 @@ The following PRs have been completed successfully:
 6. **Testing**
    - **Unit Tests**: OpenAI wrapper, ToolRunner execution.
    - **Manual Tests**: "Create a red ellipse at 100, 200"
-7. Acceptance: AI can successfully create shapes that sync to all clients.
+7. **Environment setup**:
+   - Create `.env.local` with `VITE_OPENAI_API_KEY=sk-...` (user provides own key).
+   - Add `VITE_AI_RATE_LIMIT=50` for rate limiting configuration.
+   - Verify `.env.local` is gitignored (already confirmed in .gitignore).
+8. Acceptance: AI can successfully create shapes that sync to all clients.
 
 ---
 
@@ -277,10 +286,11 @@ The following PRs have been completed successfully:
    - `alignShapes(shapeIds, alignment)` - Align shapes using existing alignment system.
    - `distributeShapes(shapeIds, direction)` - Even distribution.
    - `createTemplate(template, position)` - UI patterns (login form, button set).
-2. **Simple conflict handling**
-   - **Last write wins** for simultaneous AI operations.
-   - User notification when multiple users use AI simultaneously.
-   - No complex rollback - rely on existing sync conflict resolution.
+2. **Simple conflict handling** (**DECISIONS MADE**)
+   - **✅ STRATEGY**: "Last write wins" for simultaneous AI operations (same as humans).
+   - **✅ NOTIFICATIONS**: User notification when multiple users use AI simultaneously.
+   - **✅ NO ROLLBACKS**: No complex rollback - rely on existing sync conflict resolution.
+   - **✅ CONTEXT LIMITS**: Focus on getting it working first, context size optimization later.
 3. **Advanced prompting**
    - Support complex multi-step operations.
    - Template library for common UI patterns.
