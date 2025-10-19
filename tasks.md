@@ -116,25 +116,42 @@ The following PRs have been completed successfully:
 ## PR #10 — Text Inline Editing & Font Controls  
 **Goal:** Add double-click text editing and font styling controls.
 
-### Tasks
-1. **Inline text editing**
+### Tasks Completed ✅
+1. **Inline text editing** ✅
    - Double-click text shapes to enter edit mode.
-   - DOM input overlay positioned over Konva text.
+   - DOM input overlay positioned over Konva text with pixel-perfect alignment.
    - Edit mode state management in store.
-2. **Font controls**
-   - Font size picker in toolbar.
+   - Immediate text hiding during edit to prevent double-text display.
+   - Auto-height text boxes that expand as user types.
+   - Figma-style text creation (immediate edit mode on placement).
+2. **Font controls** ✅
+   - Font size picker in toolbar with auto-resize on change.
    - Text alignment buttons (left/center/right).
-   - Font family selector.
-3. **Text editing sync**
-   - Real-time text content sync.
-   - Font property changes sync immediately.
-4. **Unit Tests**: Text editing state management, font property updates
-5. **Code Cleanup Sweep #1**: 
+   - Font family selector with common fonts.
+   - Bold, italic, underline, strikethrough formatting.
+   - Keyboard shortcuts (Ctrl+B, Ctrl+I, Ctrl+U).
+3. **Text editing sync** ✅
+   - Real-time text content sync with auto-height calculation.
+   - Font property changes sync immediately with auto-resize.
+   - Context-aware color picker (text color vs fill color).
+4. **Unit Tests** ✅: Text editing state management, font property updates
+5. **Enhanced UX Improvements** ✅
+   - Fixed toolbar layout (no canvas shifting when text selected)
+   - Text formatting controls appear contextually in main toolbar
+   - Preserved text color visibility during selection
+   - Professional Figma-like text editing experience
+6. **Code Cleanup Sweep #1**: 
    - Remove unused imports and dead code
    - Clean up commented-out code blocks
    - Consolidate duplicate utility functions
    - Review and clean package.json dependencies
-6. Acceptance: Inline text edits sync correctly across all clients.
+7. Acceptance ✅: Inline text edits sync correctly across all clients with professional UX.
+
+**BONUS ACHIEVEMENTS:**
+- Figma-style text behavior (immediate edit on creation, auto-height expansion)
+- Advanced text formatting (bold/italic/underline/strikethrough) with keyboard shortcuts
+- Pixel-perfect text editor positioning using dynamic container detection
+- Context-aware UI (text controls appear intelligently in toolbar)
 
 ---
 

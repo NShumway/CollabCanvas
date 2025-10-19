@@ -38,6 +38,10 @@ const useCanvasStore = create<CanvasStore>((set, get) => ({
   // Dynamic selection color (adapts to selected shape colors for visibility)
   selectionColor: '#3B82F6', // Default blue, adapts when conflicts occur
   
+  // Text editing state
+  editingTextId: null, // ID of the text shape currently being edited (null means no editing)
+  textEditPosition: { x: 0, y: 0 }, // Position for the DOM input overlay
+  
   // Shape actions
   setShapes: (shapes) => set({ 
     shapes,
@@ -79,11 +83,17 @@ const useCanvasStore = create<CanvasStore>((set, get) => ({
       }
     }
     
+    // Stop text editing if the removed shape was being edited
+    const shouldStopTextEdit = state.editingTextId === id;
+    
     return {
       shapes: newShapes,
       shapeCount: Math.max(0, state.shapeCount - 1),
       selectedIds: newSelectedIds,
       selectedIdsSet: newSelectedIdsSet,
+      // Clear text editing state if the shape being edited was removed
+      editingTextId: shouldStopTextEdit ? null : state.editingTextId,
+      textEditPosition: shouldStopTextEdit ? { x: 0, y: 0 } : state.textEditPosition,
     };
   }),
   
@@ -403,6 +413,17 @@ const useCanvasStore = create<CanvasStore>((set, get) => ({
   setCreateMode: (mode) => set({ createMode: mode }),
   
   clearCreateMode: () => set({ createMode: null }),
+  
+  // Text editing actions
+  startTextEdit: (shapeId: string, position: { x: number; y: number }) => set({
+    editingTextId: shapeId,
+    textEditPosition: position,
+  }),
+  
+  stopTextEdit: () => set({
+    editingTextId: null,
+    textEditPosition: { x: 0, y: 0 },
+  }),
   
   // Tier 2: Sync tracking actions - manage pending writes to prevent echo loops
   addPendingWrite: (shapeId: string, timestamp: number = Date.now()) => set((state) => ({

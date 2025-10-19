@@ -46,6 +46,10 @@ export interface CanvasStoreState {
   createMode: CreateMode;
   selectionColor: string;
   
+  // Text editing state
+  editingTextId: string | null;
+  textEditPosition: { x: number; y: number };
+  
   // Future AI state (for upcoming PRs)
   // aiCommands: Record<string, AICommand>;
   // chatMessages: ChatMessage[];
@@ -103,6 +107,10 @@ export interface CanvasStoreActions {
   // Create mode actions
   setCreateMode: (mode: CreateMode) => void;
   clearCreateMode: () => void;
+  
+  // Text editing actions
+  startTextEdit: (shapeId: string, position: { x: number; y: number }) => void;
+  stopTextEdit: () => void;
   
   // Dynamic selection color actions
   updateSelectionColor: () => void;

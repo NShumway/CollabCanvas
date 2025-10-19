@@ -52,6 +52,12 @@ export interface TextProperties extends BaseShapeProperties {
   textAlign: 'left' | 'center' | 'right';
   width?: number; // For text wrapping
   height?: number; // For text containers
+  
+  // Text formatting
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  strikethrough?: boolean;
 }
 
 // Union type for all possible shapes

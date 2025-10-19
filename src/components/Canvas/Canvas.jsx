@@ -8,6 +8,7 @@ import { createShape, calculateMaxZIndex } from '@/utils/shapeCreation';
 import { SHAPE_DEFAULTS } from '@/utils/shapeDefaults';
 import Shape from './Shape';
 import Cursor from './Cursor';
+import TextEditor from './TextEditor';
 // PerformanceMonitor moved to App.jsx behind dev flag
 
 const CANVAS_SIZE = 5000; // 5K x 5K canvas
@@ -52,6 +53,7 @@ const Canvas = () => {
   const isLoading = useCanvasStore(state => state.isLoading);
   const currentUser = useCanvasStore(state => state.currentUser);
   const users = useCanvasStore(state => state.users);
+  const startTextEdit = useCanvasStore(state => state.startTextEdit);
 
   // Debug selection tracking removed for performance
   // Debug selection changes removed for performance
@@ -211,12 +213,15 @@ const Canvas = () => {
     };
   }, [handleMouseMove]);
   
-  // Update canvas dimensions (leave space for toolbar - 64px header + 64px toolbar)
+  // Update canvas dimensions (account for header + toolbar)
   useEffect(() => {
     const updateSize = () => {
+      const headerHeight = 48; // h-12 = 48px
+      const toolbarHeight = 64; // Base toolbar height (can expand to 96px with text controls)
+      
       setDimensions({
-        width: window.innerWidth,
-        height: window.innerHeight - 128, // Leave space for header (64px) + toolbar (64px)
+        width: window.innerWidth - 256, // Account for 256px sidebar (w-64)
+        height: window.innerHeight - (headerHeight + toolbarHeight),
       });
     };
     
@@ -324,6 +329,82 @@ const Canvas = () => {
       if (e.key === 'v' || e.key === 'V') {
         e.preventDefault();
         clearCreateMode();
+      }
+      
+      // Text formatting shortcuts (only when text is selected)
+      const selectedTextShapes = selectedIds
+        .map(id => shapes[id])
+        .filter(shape => shape && shape.type === 'text');
+      
+      if (selectedTextShapes.length > 0) {
+        // Ctrl+B - Bold
+        if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+          e.preventDefault();
+          selectedTextShapes.forEach(shape => {
+            const newBold = !shape.bold;
+            const updates = { 
+              bold: newBold,
+              updatedBy: currentUser?.uid || 'unknown',
+              clientTimestamp: Date.now()
+            };
+            
+            // Apply locally first
+            useCanvasStore.getState().updateShape(shape.id, updates);
+            
+            // Sync via SyncEngine
+            if (syncEngineRef.current) {
+              const updatedShape = { ...shape, ...updates };
+              syncEngineRef.current.applyLocalChange(shape.id, updates);
+              syncEngineRef.current.queueWrite(shape.id, updatedShape, true);
+            }
+          });
+        }
+        
+        // Ctrl+I - Italic
+        if ((e.ctrlKey || e.metaKey) && e.key === 'i') {
+          e.preventDefault();
+          selectedTextShapes.forEach(shape => {
+            const newItalic = !shape.italic;
+            const updates = { 
+              italic: newItalic,
+              updatedBy: currentUser?.uid || 'unknown',
+              clientTimestamp: Date.now()
+            };
+            
+            // Apply locally first
+            useCanvasStore.getState().updateShape(shape.id, updates);
+            
+            // Sync via SyncEngine
+            if (syncEngineRef.current) {
+              const updatedShape = { ...shape, ...updates };
+              syncEngineRef.current.applyLocalChange(shape.id, updates);
+              syncEngineRef.current.queueWrite(shape.id, updatedShape, true);
+            }
+          });
+        }
+        
+        // Ctrl+U - Underline
+        if ((e.ctrlKey || e.metaKey) && e.key === 'u') {
+          e.preventDefault();
+          selectedTextShapes.forEach(shape => {
+            const newUnderline = !shape.underline;
+            const updates = { 
+              underline: newUnderline,
+              updatedBy: currentUser?.uid || 'unknown',
+              clientTimestamp: Date.now()
+            };
+            
+            // Apply locally first
+            useCanvasStore.getState().updateShape(shape.id, updates);
+            
+            // Sync via SyncEngine
+            if (syncEngineRef.current) {
+              const updatedShape = { ...shape, ...updates };
+              syncEngineRef.current.applyLocalChange(shape.id, updates);
+              syncEngineRef.current.queueWrite(shape.id, updatedShape, true);
+            }
+          });
+        }
       }
       
       // Ctrl+} - Bring to Front (all the way) - Shift+] produces }
@@ -690,6 +771,16 @@ const Canvas = () => {
         
         clearSelection();
         
+        // 🎯 Figma-like behavior: Immediately start editing text after placement
+        if (createMode === 'text') {
+          clearCreateMode(); // Exit create mode
+          // Start text editing immediately
+          startTextEdit(newShape.id, {
+            x: pointer.x,
+            y: pointer.y,
+          });
+        }
+        
       } else {
         // No create mode - either start drag-to-select or clear selection
         
@@ -766,6 +857,29 @@ const Canvas = () => {
     }
   };
 
+  // Handle double-click for text editing
+  const handleStageDoubleClick = () => {
+    const stage = stageRef.current;
+    const pointer = stage.getPointerPosition();
+    
+    // Convert screen coordinates to world coordinates
+    const worldPos = {
+      x: (pointer.x - viewport.x) / viewport.zoom,
+      y: (pointer.y - viewport.y) / viewport.zoom,
+    };
+    
+    // Check if we double-clicked on a text shape
+    const clickedShape = getShapeAtPosition(worldPos.x, worldPos.y);
+    
+    if (clickedShape && clickedShape.type === 'text') {
+      // Start text editing
+      startTextEdit(clickedShape.id, {
+        x: pointer.x,
+        y: pointer.y,
+      });
+    }
+  };
+
   // handleStageClick REMOVED - all selection logic consolidated in handleStageMouseDown
   
   // Generate dot grid pattern for background (Figma-style) - memoized for performance
@@ -802,7 +916,7 @@ const Canvas = () => {
   }, [viewport.x, viewport.y, viewport.zoom, dimensions.width, dimensions.height]);
   
   return (
-    <div className="relative w-full bg-gray-900" style={{ height: dimensions.height }}>
+    <div className="canvas-container relative w-full bg-gray-900" style={{ height: dimensions.height }}>
       {/* Canvas Info Overlay */}
       <div className="absolute top-4 left-4 z-10 bg-black bg-opacity-50 text-white px-3 py-2 rounded text-sm">
         <div>Zoom: {(viewport.zoom * 100).toFixed(0)}%</div>
@@ -827,6 +941,7 @@ const Canvas = () => {
         onWheel={handleWheel}
         onMouseDown={handleStageMouseDown}
         onMouseUp={handleStageMouseUp}
+        onDblClick={handleStageDoubleClick}
         tabIndex={0} // Make Stage focusable for keyboard events
         style={{ 
           cursor: isSpacePressed ? 'grab' : 
@@ -894,6 +1009,9 @@ const Canvas = () => {
           )}
         </Layer>
       </Stage>
+      
+      {/* Text Editor Overlay */}
+      <TextEditor />
     </div>
   );
 };
