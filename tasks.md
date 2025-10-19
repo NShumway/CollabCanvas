@@ -192,58 +192,7 @@ The following PRs have been completed successfully:
 
 ---
 
-## PR #12 — Alignment Tools & Distribution
-**Goal:** Add align and distribute tools for selected shapes.
-
-### Tasks
-1. **Alignment functions** (**USE KONVA BUILT-INS**)
-   - Implement `alignShapes(shapeIds, alignment)` helper.
-   - **⚠️ LEVERAGE NATIVE**: Use Konva's `node.getClientRect()` and `node.absolutePosition()` methods for precise bounds calculation and positioning.
-   - Support: left, center, right, top, middle, bottom alignment.
-   - Work with multi-selected shapes.
-2. **Distribution functions** (**USE KONVA BUILT-INS**)
-   - Implement `distributeShapes(shapeIds, direction)` helper.
-   - **⚠️ LEVERAGE NATIVE**: Use Konva's positioning methods and bounds calculation for accurate distribution.
-   - Support horizontal and vertical distribution.
-3. **Toolbar integration**
-   - Alignment button group in toolbar.
-   - Distribution button group.
-   - Enable/disable based on selection count.
-4. **Unit Tests**: Alignment calculations, distribution algorithms
-5. Acceptance: Alignment and distribution operations visible across all clients.
-
----
-
-## PR #13 — Copy/Paste & Keyboard Shortcuts
-**Goal:** Implement internal clipboard and comprehensive keyboard shortcuts.
-
-### Tasks
-1. **Clipboard system** (**CONSIDER NATIVE CLIPBOARD API**)
-   - **⚠️ EVALUATE**: Consider using browser's native `navigator.clipboard.writeText()` and `navigator.clipboard.readText()` API for better user experience (requires HTTPS).
-   - **FALLBACK**: Keep internal clipboard store slice as fallback for browsers without clipboard permissions.
-   - Copy selected shapes to clipboard (JSON serialization).
-   - Paste with offset positioning.
-   - Preserve relative positions in multi-shape copies.
-2. **Keyboard shortcuts**
-   - Copy (Ctrl+C), Paste (Ctrl+V).
-   - Select All (Ctrl+A), Delete key.
-   - Duplicate (Ctrl+D), Undo prevention message.
-   - Arrow keys for nudging selected shapes.
-   - Escape to clear selection.
-3. **Help overlay**
-   - Keyboard shortcut help (Ctrl+?).
-   - Modal overlay with shortcut list.
-4. **Unit Tests**: Clipboard operations, keyboard event handling
-5. **Code Cleanup Sweep #2 (Pre-AI)**:
-   - Audit all components for unused props/state
-   - Remove temporary debugging code and console.logs
-   - Clean up store actions - consolidate similar functions
-   - Review file structure - move misplaced files to correct directories
-6. Acceptance: Copy/paste maintains relative layouts; all shortcuts work consistently.
-
----
-
-## PR #14 — AI Integration: Foundation + Core Tool
+## PR #12 — AI Integration: Foundation + Core Tool
 **Goal:** Integrate OpenAI GPT-4o with basic infrastructure and 1 core tool.
 
 ### Tasks
@@ -275,7 +224,7 @@ The following PRs have been completed successfully:
 
 ---
 
-## PR #15 — AI: Essential Tools Expansion  
+## PR #13 — AI: Essential Tools Expansion  
 **Goal:** Add 3 more essential AI tools for shape manipulation.
 
 ### Tasks
@@ -297,7 +246,29 @@ The following PRs have been completed successfully:
 
 ---
 
-## PR #16 — AI: Layout & Composite Tools
+## PR #14 — Alignment Tools & Distribution
+**Goal:** Add align and distribute tools for selected shapes.
+
+### Tasks
+1. **Alignment functions** (**USE KONVA BUILT-INS**)
+   - Implement `alignShapes(shapeIds, alignment)` helper.
+   - **⚠️ LEVERAGE NATIVE**: Use Konva's `node.getClientRect()` and `node.absolutePosition()` methods for precise bounds calculation and positioning.
+   - Support: left, center, right, top, middle, bottom alignment.
+   - Work with multi-selected shapes.
+2. **Distribution functions** (**USE KONVA BUILT-INS**)
+   - Implement `distributeShapes(shapeIds, direction)` helper.
+   - **⚠️ LEVERAGE NATIVE**: Use Konva's positioning methods and bounds calculation for accurate distribution.
+   - Support horizontal and vertical distribution.
+3. **Toolbar integration**
+   - Alignment button group in toolbar.
+   - Distribution button group.
+   - Enable/disable based on selection count.
+4. **Unit Tests**: Alignment calculations, distribution algorithms
+5. Acceptance: Alignment and distribution operations visible across all clients.
+
+---
+
+## PR #15 — AI: Layout & Composite Tools
 **Goal:** Add advanced layout tools and template creation.
 
 ### Tasks
@@ -316,12 +287,41 @@ The following PRs have been completed successfully:
 4. **Testing**
    - **Unit Tests**: Layout algorithms and template creation.
    - **Manual Tests**: "Create a login form" and "Arrange these shapes in a 3x3 grid"
-5. **Code Cleanup Sweep #3 (Post-AI)**:
+5. **Code Cleanup Sweep #2 (Post-AI)**:
    - Review AI service files for unused functions
    - Clean up tool implementations - remove experimental code
    - Audit error handling consistency across AI tools
    - Remove any temporary AI testing/debugging utilities
 6. Acceptance: AI can create complex layouts and handle basic multi-user scenarios.
+
+---
+
+## PR #16 — Copy/Paste & Keyboard Shortcuts
+**Goal:** Implement internal clipboard and comprehensive keyboard shortcuts.
+
+### Tasks
+1. **Clipboard system** (**CONSIDER NATIVE CLIPBOARD API**)
+   - **⚠️ EVALUATE**: Consider using browser's native `navigator.clipboard.writeText()` and `navigator.clipboard.readText()` API for better user experience (requires HTTPS).
+   - **FALLBACK**: Keep internal clipboard store slice as fallback for browsers without clipboard permissions.
+   - Copy selected shapes to clipboard (JSON serialization).
+   - Paste with offset positioning.
+   - Preserve relative positions in multi-shape copies.
+2. **Keyboard shortcuts**
+   - Copy (Ctrl+C), Paste (Ctrl+V).
+   - Select All (Ctrl+A), Delete key.
+   - Duplicate (Ctrl+D), Undo prevention message.
+   - Arrow keys for nudging selected shapes.
+   - Escape to clear selection.
+3. **Help overlay**
+   - Keyboard shortcut help (Ctrl+?).
+   - Modal overlay with shortcut list.
+4. **Unit Tests**: Clipboard operations, keyboard event handling
+5. **Code Cleanup Sweep #3 (Post-AI)**:
+   - Audit all components for unused props/state
+   - Remove temporary debugging code and console.logs
+   - Clean up store actions - consolidate similar functions
+   - Review file structure - move misplaced files to correct directories
+6. Acceptance: Copy/paste maintains relative layouts; all shortcuts work consistently.
 
 ---
 
@@ -428,8 +428,8 @@ The following PRs have been completed successfully:
 
 ### **Code Cleanup Strategy**
 - **Cleanup Sweep #1** (PR #11): After core canvas features - remove early development artifacts
-- **Cleanup Sweep #2** (PR #13): Pre-AI integration - ensure clean foundation for AI features  
-- **Cleanup Sweep #3** (PR #16): Post-AI integration - clean up AI development artifacts
+- **Cleanup Sweep #2** (PR #15): Post-AI integration - clean up AI development artifacts  
+- **Cleanup Sweep #3** (PR #16): Post-AI features - prepare for final features and polish
 - **Final Cleanup** (PR #18): Pre-deployment - production-ready code audit
 
 ### **Cross-PR Acceptance Criteria**
