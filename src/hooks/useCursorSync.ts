@@ -21,7 +21,7 @@ import useCanvasStore from '@/store/canvasStore';
 import { useAuth } from './useAuth';
 import { generateUserColor } from '@/utils/userColor';
 import { devLog } from '@/utils/devSettings';
-import type { MultiplayerUser, UserCollection } from '@/types';
+import type { UserCollection } from '@/types';
 
 interface UseCursorSyncReturn {
   writeCursorPosition: (cursorX: number, cursorY: number) => Promise<void>;
@@ -70,44 +70,53 @@ export const useCursorSync = (): UseCursorSyncReturn => {
   useEffect(() => {
     if (!currentUser?.uid) return;
     
-    console.log('🎯 Setting up cursor listener (separate from shape sync)');
+    devLog.sync('Setting up cursor listener');
     
     const usersRef = getUsersRef();
     
     const unsubscribe: Unsubscribe = onSnapshot(usersRef, 
       (snapshot) => {
-        const updatedUsers: UserCollection = {};
+        // PERFORMANCE: Process only changed documents, not entire collection
+        const updatedUsers: UserCollection = { ...useCanvasStore.getState().users };
         const now = Date.now();
-        const ACTIVITY_TIMEOUT = 30 * 1000; // 30 seconds - same as OnlineUsers component
+        const ACTIVITY_TIMEOUT = 30 * 1000;
         
-        snapshot.docs.forEach(doc => {
-          const userData = doc.data();
-          const userId = doc.id;
+        // Only process documents that actually changed
+        snapshot.docChanges().forEach(change => {
+          const userId = change.doc.id;
           
-          // Filter out current user (don't show own cursor)
+          // Skip current user
           if (userId === currentUser.uid) {
             return;
           }
           
-          // Filter out offline users
-          if (!userData['online']) {
+          if (change.type === 'removed') {
+            delete updatedUsers[userId];
             return;
           }
           
-          // Filter out users with stale activity (inactive for >30s)
-          // Handle Firestore Timestamp objects (same pattern as shape sync)
-          const lastSeenTime = userData['lastSeen']?.seconds 
-            ? userData['lastSeen'].seconds * 1000  // Firestore Timestamp
-            : userData['lastSeen'] instanceof Date 
-              ? userData['lastSeen'].getTime()     // JavaScript Date
-              : new Date(userData['lastSeen']).getTime(); // Date string
+          const userData = change.doc.data();
           
-          if ((now - lastSeenTime) >= ACTIVITY_TIMEOUT) {
-            return; // User has been inactive too long
+          // Filter out offline users
+          if (!userData['online']) {
+            delete updatedUsers[userId];
+            return;
           }
           
-          // Add user to updated users map (active within last 30s)
-          const user: MultiplayerUser = {
+          // Filter out stale activity
+          const lastSeenTime = userData['lastSeen']?.seconds 
+            ? userData['lastSeen'].seconds * 1000
+            : userData['lastSeen'] instanceof Date 
+              ? userData['lastSeen'].getTime()
+              : new Date(userData['lastSeen']).getTime();
+          
+          if ((now - lastSeenTime) >= ACTIVITY_TIMEOUT) {
+            delete updatedUsers[userId];
+            return;
+          }
+          
+          // Add/update user
+          updatedUsers[userId] = {
             uid: userData['uid'],
             displayName: userData['displayName'],
             cursorX: userData['cursorX'],
@@ -116,26 +125,18 @@ export const useCursorSync = (): UseCursorSyncReturn => {
             online: userData['online'],
             lastSeen: userData['lastSeen']
           };
-          
-          updatedUsers[userId] = user;
         });
         
-        // Update Zustand with all active cursor users
+        // Only update state if something changed
         setUsers(updatedUsers);
-        
-        const userCount = Object.keys(updatedUsers).length;
-        if (userCount > 0) {
-          console.log('👥 Updated cursors for', userCount, 'users');
-        }
       },
       (error) => {
-        // Log cursor listener errors but don't crash the app
-        console.warn('Cursor listener error (non-critical):', error);
+        devLog.warn('Cursor listener error (non-critical):', error);
       }
     );
     
     return () => {
-      console.log('🧹 Cleaning up cursor listener');
+      devLog.sync('Cleaning up cursor listener');
       unsubscribe();
     };
   }, [currentUser, setUsers]);

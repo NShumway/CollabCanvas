@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import type { CanvasStore, Shape, AICommand, ChatMessage } from '@/types';
-import { getOptimalSelectionColor } from '@/utils/colorContrast';
 
 const useCanvasStore = create<CanvasStore>((set, get) => ({
   // Canvas shapes
@@ -106,29 +105,74 @@ const useCanvasStore = create<CanvasStore>((set, get) => ({
   }),
   
   // Helper function to update selection color based on selected shapes
+  // Optimized for performance - lightweight calculation only
   updateSelectionColor: () => {
     const state = get();
-    const shapeColors = state.selectedIds
-      .map(id => state.shapes[id]?.fill)
-      .filter((color): color is string => Boolean(color)); // Type-safe filter for defined colors
     
-    const optimalColor = getOptimalSelectionColor(shapeColors);
+    // Fast path: no shapes selected = default blue
+    if (state.selectedIds.length === 0) {
+      if (state.selectionColor !== '#3B82F6') {
+        set({ selectionColor: '#3B82F6' });
+      }
+      return;
+    }
     
-    if (optimalColor !== state.selectionColor) {
-      set({ selectionColor: optimalColor });
+    // Fast path: single shape - quick color check
+    if (state.selectedIds.length === 1) {
+      const shapeId = state.selectedIds[0];
+      if (!shapeId) return; // Safety check
+      
+      const shape = state.shapes[shapeId];
+      const shapeColor = shape?.fill;
+      
+      // Simple blue vs orange decision without expensive calculation
+      const needsOrange = shapeColor && (
+        shapeColor.toLowerCase().includes('blue') || 
+        shapeColor === '#3B82F6' || 
+        shapeColor === '#0000ff'
+      );
+      
+      const targetColor = needsOrange ? '#EA580C' : '#3B82F6';
+      if (state.selectionColor !== targetColor) {
+        set({ selectionColor: targetColor });
+      }
+      return;
+    }
+    
+    // Multi-select: just use default blue to keep it fast
+    if (state.selectionColor !== '#3B82F6') {
+      set({ selectionColor: '#3B82F6' });
     }
   },
 
   // Selection actions
   setSelectedIds: (ids) => {
     const idsArray = Array.isArray(ids) ? ids : [ids];
+    const state = get();
+    
+    // Calculate selection color immediately to batch with state update
+    let selectionColor = state.selectionColor;
+    if (idsArray.length === 0) {
+      selectionColor = '#3B82F6';
+    } else if (idsArray.length === 1 && idsArray[0]) {
+      const shape = state.shapes[idsArray[0]];
+      const shapeColor = shape?.fill;
+      const needsOrange = shapeColor && (
+        shapeColor.toLowerCase().includes('blue') || 
+        shapeColor === '#3B82F6' || 
+        shapeColor === '#0000ff'
+      );
+      selectionColor = needsOrange ? '#EA580C' : '#3B82F6';
+    } else {
+      selectionColor = '#3B82F6';
+    }
+    
+    // Single batched update - no cascading re-renders
     set({ 
       selectedIds: idsArray,
-      selectedIdsSet: new Set(idsArray) 
+      selectedIdsSet: new Set(idsArray),
+      selectionColor
     });
-    
-    // Update selection color based on new selection
-    get().updateSelectionColor();
   },
   
   addSelectedId: (id: string) => set((state) => {
@@ -148,13 +192,12 @@ const useCanvasStore = create<CanvasStore>((set, get) => ({
   }),
   
   clearSelection: () => {
+    // Single batched update with default color
     set({ 
       selectedIds: [],
-      selectedIdsSet: new Set()
+      selectedIdsSet: new Set(),
+      selectionColor: '#3B82F6'
     });
-    
-    // Reset to default selection color when no shapes selected
-    get().updateSelectionColor();
   },
   
   // Multi-select helper actions
@@ -168,16 +211,25 @@ const useCanvasStore = create<CanvasStore>((set, get) => ({
     const newSet = new Set(state.selectedIdsSet);
     newSet.add(id);
     
+    // Calculate selection color to batch with state update
+    let selectionColor = '#3B82F6'; // Default for multi-select
+    if (newIds.length === 1) {
+      const shape = state.shapes[id];
+      const shapeColor = shape?.fill;
+      const needsOrange = shapeColor && (
+        shapeColor.toLowerCase().includes('blue') || 
+        shapeColor === '#3B82F6' || 
+        shapeColor === '#0000ff'
+      );
+      selectionColor = needsOrange ? '#EA580C' : '#3B82F6';
+    }
+    
+    // Single batched update
     set({ 
       selectedIds: newIds,
-      selectedIdsSet: newSet
+      selectedIdsSet: newSet,
+      selectionColor
     });
-    
-    // Only update color if this is the first selection or selection was empty
-    // For multi-select additions, keep current color for performance
-    if (state.selectedIds.length === 0) {
-      get().updateSelectionColor();
-    }
   },
   
   removeFromSelection: (id: string) => {
@@ -190,26 +242,37 @@ const useCanvasStore = create<CanvasStore>((set, get) => ({
     const newSet = new Set(state.selectedIdsSet);
     newSet.delete(id);
     
+    // Calculate selection color to batch with state update
+    let selectionColor = '#3B82F6';
+    if (newIds.length === 1 && newIds[0]) {
+      const shape = state.shapes[newIds[0]];
+      const shapeColor = shape?.fill;
+      const needsOrange = shapeColor && (
+        shapeColor.toLowerCase().includes('blue') || 
+        shapeColor === '#3B82F6' || 
+        shapeColor === '#0000ff'
+      );
+      selectionColor = needsOrange ? '#EA580C' : '#3B82F6';
+    }
+    
+    // Single batched update
     set({
       selectedIds: newIds,
-      selectedIdsSet: newSet
+      selectedIdsSet: newSet,
+      selectionColor
     });
-    
-    // Skip expensive color calculation for deselection - keep current color
-    // Color will update naturally on next selection
   },
   
   selectAll: () => {
     const state = get();
     const allIds = Object.keys(state.shapes);
     
+    // For selectAll, just use default blue to keep it fast
     set({
       selectedIds: allIds,
-      selectedIdsSet: new Set(allIds)
+      selectedIdsSet: new Set(allIds),
+      selectionColor: '#3B82F6'
     });
-    
-    // Update selection color based on all selected shapes
-    get().updateSelectionColor();
   },
   
   // Batch operations for selected shapes

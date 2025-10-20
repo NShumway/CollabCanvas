@@ -1,13 +1,16 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-import { Stage, Layer, Rect, Ellipse, Transformer } from 'react-konva';
+import { Stage, Layer, Rect, Ellipse } from 'react-konva';
+import { useShallow } from 'zustand/react/shallow';
 import useCanvasStore from '@/store/canvasStore';
 import { useFirestoreSync } from '@/hooks/useFirestoreSync';
 import { useCursorSync } from '@/hooks/useCursorSync';
 import { createSyncEngine } from '@/services/syncEngine';
 import { createShape, calculateMaxZIndex } from '@/utils/shapeCreation';
 import { SHAPE_DEFAULTS } from '@/utils/shapeDefaults';
-import Shape from './Shape';
-import Cursor from './Cursor';
+import ShapesLayer from './ShapesLayer';
+import TransformerLayer from './TransformerLayer';
+import CursorsLayer from './CursorsLayer';
+import GridLayer from './GridLayer';
 import TextEditor from './TextEditor';
 // PerformanceMonitor moved to App.jsx behind dev flag
 
@@ -16,6 +19,7 @@ const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 3;
 
 const Canvas = () => {
+  
   const stageRef = useRef(null);
   const syncEngineRef = useRef(null);
   const cursorThrottleRef = useRef(null);
@@ -34,13 +38,22 @@ const Canvas = () => {
     aspectLock: false, // Whether aspect ratio should be maintained
   });
   
-  // Selective store subscriptions for performance
-  const viewport = useCanvasStore(state => state.viewport);
+  // Store state (using useShallow to avoid re-renders when values haven't changed)
+  const { viewport, shapes, selectedIds, selectedIdsSet, createMode, isLoading, users, selectionColor } = useCanvasStore(
+    useShallow(state => ({
+      viewport: state.viewport,
+      shapes: state.shapes,
+      selectedIds: state.selectedIds,
+      selectedIdsSet: state.selectedIdsSet,
+      createMode: state.createMode,
+      isLoading: state.isLoading,
+      users: state.users,
+      selectionColor: state.selectionColor,
+    }))
+  );
+  
+  // Action functions (stable references, never cause re-renders)
   const updateViewport = useCanvasStore(state => state.updateViewport);
-  const shapes = useCanvasStore(state => state.shapes);
-  const selectedIds = useCanvasStore(state => state.selectedIds);
-  const selectedIdsSet = useCanvasStore(state => state.selectedIdsSet);
-  const createMode = useCanvasStore(state => state.createMode);
   const setCreateMode = useCanvasStore(state => state.setCreateMode);
   const clearCreateMode = useCanvasStore(state => state.clearCreateMode);
   const clearSelection = useCanvasStore(state => state.clearSelection);
@@ -54,12 +67,25 @@ const Canvas = () => {
   const sendToBack = useCanvasStore(state => state.sendToBack);
   const bringForward = useCanvasStore(state => state.bringForward);
   const sendBackward = useCanvasStore(state => state.sendBackward);
-  const isLoading = useCanvasStore(state => state.isLoading);
-  const currentUser = useCanvasStore(state => state.currentUser);
-  const users = useCanvasStore(state => state.users);
   const startTextEdit = useCanvasStore(state => state.startTextEdit);
-  const aspectLock = useCanvasStore(state => state.aspectLock);
   const toggleAspectLock = useCanvasStore(state => state.toggleAspectLock);
+  
+  // Refs for values only used in callbacks (don't need re-renders)
+  const currentUserRef = useRef(null);
+  const aspectLockRef = useRef(false);
+  
+  // Keep refs in sync with store
+  useEffect(() => {
+    currentUserRef.current = useCanvasStore.getState().currentUser;
+    aspectLockRef.current = useCanvasStore.getState().aspectLock;
+    
+    const unsubscribe = useCanvasStore.subscribe((state) => {
+      currentUserRef.current = state.currentUser;
+      aspectLockRef.current = state.aspectLock;
+    });
+    
+    return unsubscribe;
+  }, []);
 
   // Debug selection tracking removed for performance
   // Debug selection changes removed for performance
@@ -72,11 +98,13 @@ const Canvas = () => {
   
   // WRITE PATH: Initialize SyncEngine for writing to Firestore
   useEffect(() => {
+    const currentUser = currentUserRef.current;
     if (currentUser && !syncEngineRef.current) {
       syncEngineRef.current = createSyncEngine();
       syncEngineRef.current.initialize(useCanvasStore.getState, currentUser);
     }
-  }, [currentUser]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   
   // Cleanup SyncEngine on unmount
   useEffect(() => {
@@ -86,27 +114,6 @@ const Canvas = () => {
       }
     };
   }, []);
-  
-  // Attach transformer to selected shapes
-  useEffect(() => {
-    const transformer = transformerRef.current;
-    if (!transformer) return;
-    
-    // Get selected shape nodes from refs
-    const selectedNodes = selectedIds
-      .map(id => shapeRefs.current.get(id))
-      .filter(node => node); // Filter out undefined refs
-    
-    if (selectedNodes.length > 0) {
-      // Attach transformer to selected nodes
-      transformer.nodes(selectedNodes);
-      transformer.getLayer()?.batchDraw();
-    } else {
-      // Clear transformer when no selection
-      transformer.nodes([]);
-      transformer.getLayer()?.batchDraw();
-    }
-  }, [selectedIds]);
   
   // Store latest viewport in ref to avoid callback recreation on viewport changes
   const viewportRef = useRef(viewport);
@@ -121,9 +128,48 @@ const Canvas = () => {
     }
   }, []);
   
+  // Handle shape clicks (called from Shape components)
+  const handleShapeClick = useCallback((shapeId, isShiftKey) => {
+    const currentSelectedIdsSet = useCanvasStore.getState().selectedIdsSet;
+    
+    if (isShiftKey) {
+      // Shift-click: Toggle selection
+      if (currentSelectedIdsSet.has(shapeId)) {
+        removeFromSelection(shapeId);
+      } else {
+        addToSelection(shapeId);
+      }
+    } else {
+      // Regular click: Select (replace if not already selected)
+      if (!currentSelectedIdsSet.has(shapeId)) {
+        setSelectedIds([shapeId]);
+      }
+      // If already selected, don't change selection (allows dragging)
+    }
+  }, [removeFromSelection, addToSelection, setSelectedIds]);
+  
+  // Handle individual shape drag end (for unselected shapes or single-shape drags)
+  const handleShapeDragEnd = useCallback((shapeId, node) => {
+    const shape = shapes[shapeId];
+    if (!shape) return;
+    
+    // Get final position after drag
+    const finalAttrs = {
+      x: node.x(),
+      y: node.y(),
+    };
+    
+    // Update local store and queue write
+    if (syncEngineRef.current) {
+      syncEngineRef.current.applyLocalChange(shapeId, finalAttrs);
+      const updatedShape = { ...shape, ...finalAttrs };
+      syncEngineRef.current.queueWrite(shapeId, updatedShape, true);
+    }
+  }, [shapes]);
+  
   // Throttled cursor position update (50ms = 20Hz)
   const updateCursorPosition = useCallback((pointer) => {
-    if (!currentUser) return;
+    if (!currentUserRef.current) return;
     
     // Convert screen coordinates to world coordinates (account for pan/zoom)
     const currentViewport = viewportRef.current;
@@ -136,7 +182,7 @@ const Canvas = () => {
     if (writeCursorPosition) {
       writeCursorPosition(worldPos.x, worldPos.y);
     }
-  }, [currentUser]);
+  }, [writeCursorPosition]);
   
   // Utility: Convert screen coordinates to world coordinates
   const screenToWorld = useCallback((screenX, screenY) => ({
@@ -146,7 +192,7 @@ const Canvas = () => {
 
   // Handle cursor position updates (50ms debounced to server)
   const handleCursorUpdate = useCallback((pointer) => {
-    if (!currentUser) return;
+    if (!currentUserRef.current) return;
     
     // Clear existing throttle timeout
     if (cursorThrottleRef.current) {
@@ -157,7 +203,7 @@ const Canvas = () => {
     cursorThrottleRef.current = setTimeout(() => {
       updateCursorPosition(pointer);
     }, 50);
-  }, [currentUser, updateCursorPosition]);
+  }, [updateCursorPosition]);
 
   // REMOVED: handleShapeDragging - Konva Transformer now handles ALL shape interactions
   // This eliminates the conflict between dragging systems that caused jerkiness
@@ -177,7 +223,7 @@ const Canvas = () => {
 
   // ORGANIZED MOUSE MOVE: Calls sub-handlers for each responsibility
   const handleMouseMove = useCallback((e) => {
-    if (!currentUser) return;
+    if (!currentUserRef.current) return;
     
     const stage = stageRef.current;
     if (!stage) return;
@@ -193,7 +239,7 @@ const Canvas = () => {
     handleCursorUpdate(pointer);
     handleSelectionRectangle(pointer);
     // Note: Shape dragging and panning now handled by Konva's built-in systems
-  }, [currentUser, handleCursorUpdate, handleSelectionRectangle]);
+  }, [handleCursorUpdate, handleSelectionRectangle]);
   
   // Cleanup cursor throttle on unmount
   useEffect(() => {
@@ -246,7 +292,6 @@ const Canvas = () => {
       const isTyping = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.contentEditable === 'true';
       if (isTyping) return;
       
-      
       // Space key for panning (like Figma)
       if (e.code === 'Space' && !isSpacePressed) {
         e.preventDefault();
@@ -266,10 +311,11 @@ const Canvas = () => {
       
       // Delete - Remove selected shapes
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selectedIds.length > 0) {
+        const currentSelectedIds = useCanvasStore.getState().selectedIds;
+        if (currentSelectedIds.length > 0) {
           e.preventDefault();
           // Use SyncEngine for proper sync
-          selectedIds.forEach(shapeId => {
+          currentSelectedIds.forEach(shapeId => {
             if (syncEngineRef.current) {
               syncEngineRef.current.deleteShape(shapeId);
             }
@@ -281,7 +327,8 @@ const Canvas = () => {
       
       // Ctrl+D - Duplicate selected shapes
       if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
-        if (selectedIds.length > 0) {
+        const currentSelectedIds = useCanvasStore.getState().selectedIds;
+        if (currentSelectedIds.length > 0) {
           e.preventDefault();
           // ✅ Use the store action instead of duplicating logic
           duplicateSelectedShapes();
@@ -355,7 +402,7 @@ const Canvas = () => {
             const newBold = !shape.bold;
             const updates = { 
               bold: newBold,
-              updatedBy: currentUser?.uid || 'unknown',
+              updatedBy: currentUserRef.current?.uid || 'unknown',
               clientTimestamp: Date.now()
             };
             
@@ -378,7 +425,7 @@ const Canvas = () => {
             const newItalic = !shape.italic;
             const updates = { 
               italic: newItalic,
-              updatedBy: currentUser?.uid || 'unknown',
+              updatedBy: currentUserRef.current?.uid || 'unknown',
               clientTimestamp: Date.now()
             };
             
@@ -401,7 +448,7 @@ const Canvas = () => {
             const newUnderline = !shape.underline;
             const updates = { 
               underline: newUnderline,
-              updatedBy: currentUser?.uid || 'unknown',
+              updatedBy: currentUserRef.current?.uid || 'unknown',
               clientTimestamp: Date.now()
             };
             
@@ -420,18 +467,19 @@ const Canvas = () => {
       
       // Ctrl+} - Bring to Front (all the way) - Shift+] produces }
       if ((e.ctrlKey || e.metaKey) && e.key === '}') {
-        if (selectedIds.length > 0) {
+        const currentState = useCanvasStore.getState();
+        if (currentState.selectedIds.length > 0) {
           e.preventDefault();
-          const maxZIndex = Math.max(0, ...Object.values(shapes).map(s => s.zIndex || 0));
-          selectedIds.forEach(shapeId => {
+          const maxZIndex = Math.max(0, ...Object.values(currentState.shapes).map(s => s.zIndex || 0));
+          currentState.selectedIds.forEach(shapeId => {
             // Apply locally first
             bringToFront(shapeId);
             // Sync via SyncEngine
-            const updatedShape = shapes[shapeId];
+            const updatedShape = currentState.shapes[shapeId];
             if (updatedShape && syncEngineRef.current) {
               const updateData = { 
                 zIndex: maxZIndex + 1,
-                updatedBy: currentUser?.uid || 'unknown',
+                updatedBy: currentUserRef.current?.uid || 'unknown',
                 clientTimestamp: Date.now()
               };
               syncEngineRef.current.applyLocalChange(shapeId, updateData);
@@ -442,9 +490,10 @@ const Canvas = () => {
       }
       // Ctrl+] - Bring forward (one step)
       else if ((e.ctrlKey || e.metaKey) && e.key === ']') {
-        if (selectedIds.length > 0) {
+        const currentSelectedIds = useCanvasStore.getState().selectedIds;
+        if (currentSelectedIds.length > 0) {
           e.preventDefault();
-          selectedIds.forEach(shapeId => {
+          currentSelectedIds.forEach(shapeId => {
             // Apply locally first (store handles collision detection)
             bringForward(shapeId);
             // Get updated shape with collision-free z-index
@@ -452,7 +501,7 @@ const Canvas = () => {
             if (updatedShape && syncEngineRef.current) {
               const updateData = { 
                 zIndex: updatedShape.zIndex,
-                updatedBy: currentUser?.uid || 'unknown',
+                updatedBy: currentUserRef.current?.uid || 'unknown',
                 clientTimestamp: Date.now()
               };
               syncEngineRef.current.applyLocalChange(shapeId, updateData);
@@ -464,18 +513,19 @@ const Canvas = () => {
       
       // Ctrl+{ - Send to Back (all the way) - Shift+[ produces {
       if ((e.ctrlKey || e.metaKey) && e.key === '{') {
-        if (selectedIds.length > 0) {
+        const currentState = useCanvasStore.getState();
+        if (currentState.selectedIds.length > 0) {
           e.preventDefault();
-          const minZIndex = Math.min(0, ...Object.values(shapes).map(s => s.zIndex || 0));
-          selectedIds.forEach(shapeId => {
+          const minZIndex = Math.min(0, ...Object.values(currentState.shapes).map(s => s.zIndex || 0));
+          currentState.selectedIds.forEach(shapeId => {
             // Apply locally first
             sendToBack(shapeId);
             // Sync via SyncEngine
-            const updatedShape = shapes[shapeId];
+            const updatedShape = currentState.shapes[shapeId];
             if (updatedShape && syncEngineRef.current) {
               const updateData = { 
                 zIndex: minZIndex - 1,
-                updatedBy: currentUser?.uid || 'unknown',
+                updatedBy: currentUserRef.current?.uid || 'unknown',
                 clientTimestamp: Date.now()
               };
               syncEngineRef.current.applyLocalChange(shapeId, updateData);
@@ -486,9 +536,10 @@ const Canvas = () => {
       }
       // Ctrl+[ - Send backward (one step)  
       else if ((e.ctrlKey || e.metaKey) && e.key === '[') {
-        if (selectedIds.length > 0) {
+        const currentSelectedIds = useCanvasStore.getState().selectedIds;
+        if (currentSelectedIds.length > 0) {
           e.preventDefault();
-          selectedIds.forEach(shapeId => {
+          currentSelectedIds.forEach(shapeId => {
             // Apply locally first (store handles collision detection)
             sendBackward(shapeId);
             // Get updated shape with collision-free z-index
@@ -496,7 +547,7 @@ const Canvas = () => {
             if (updatedShape && syncEngineRef.current) {
               const updateData = { 
                 zIndex: updatedShape.zIndex,
-                updatedBy: currentUser?.uid || 'unknown',
+                updatedBy: currentUserRef.current?.uid || 'unknown',
                 clientTimestamp: Date.now()
               };
               syncEngineRef.current.applyLocalChange(shapeId, updateData);
@@ -520,7 +571,7 @@ const Canvas = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [createMode, clearCreateMode, clearSelection, setCreateMode, selectedIds, shapes, deleteSelectedShapes, duplicateSelectedShapes, selectAll, currentUser, isSpacePressed]);
+  }, [createMode, clearCreateMode, clearSelection, setCreateMode, deleteSelectedShapes, duplicateSelectedShapes, selectAll, bringToFront, sendToBack, bringForward, sendBackward, isSpacePressed, isSelecting]);
   
   // Handle pan functionality
   const handleDragEnd = (e) => {
@@ -627,6 +678,35 @@ const Canvas = () => {
     });
   }, [isTransforming]);
 
+  // Handle Transformer drag end (for position-only drags, no scaling/rotation)
+  const handleTransformerDragEnd = useCallback(() => {
+    if (!transformerRef.current) return;
+    
+    const transformer = transformerRef.current;
+    const nodes = transformer.nodes();
+    
+    // Sync position changes for all selected shapes
+    nodes.forEach(node => {
+      const shapeId = node.id();
+      const shape = shapes[shapeId];
+      if (!shape) return;
+      
+      // Get final position (center coordinates due to offsetX/offsetY)
+      const finalAttrs = {
+        x: node.x(),
+        y: node.y(),
+      };
+      
+      // Update local store and queue write
+      if (syncEngineRef.current) {
+        syncEngineRef.current.applyLocalChange(shapeId, finalAttrs);
+        const updatedShape = { ...shape, ...finalAttrs };
+        syncEngineRef.current.queueWrite(shapeId, updatedShape, true);
+      }
+    });
+  }, [shapes]);
+
+  // Handle Transformer transform end (for scale/rotate operations)
   const handleTransformEnd = useCallback(() => {
     if (!isTransforming || !transformerRef.current) return;
     
@@ -677,21 +757,9 @@ const Canvas = () => {
     }));
   }, [isTransforming, shapes]);
 
-  // Handle shape position updates (called during drag move and end)
-  const handleShapePositionUpdate = useCallback((shapeId, newX, newY) => {
-    const shape = shapes[shapeId];
-    if (!shape || !syncEngineRef.current) return;
-    
-    // newX, newY are center coordinates due to offsetX/offsetY in Shape.jsx
-    const finalAttrs = { x: newX, y: newY };
-    
-    // Always update local state immediately for smooth UX
-    syncEngineRef.current.applyLocalChange(shapeId, finalAttrs);
-    
-    // Debounce server writes to avoid excessive network calls during drag
-    const updatedShape = { ...shape, ...finalAttrs };
-    syncEngineRef.current.queueWrite(shapeId, updatedShape, false); // false = debounced write
-  }, [shapes]);
+  // REMOVED: handleShapePositionUpdate
+  // Shapes are no longer individually draggable - Transformer handles ALL movement
+  // Position updates now happen in handleTransformerDragEnd below
 
 
   // Handle stage panning drag end (when stage itself is dragged, not shapes)
@@ -712,13 +780,13 @@ const Canvas = () => {
     return {
       enabledAnchors: ['top-left', 'top-center', 'top-right', 'middle-right', 
                       'bottom-right', 'bottom-center', 'bottom-left', 'middle-left'],
-      keepRatio: aspectLock,
+      keepRatio: aspectLockRef.current,
       boundBoxFunc: (oldBox, newBox) => {
         // Optional: Add boundary constraints here if needed
         return newBox;
       }
     };
-  }, [aspectLock]);
+  }, []);
 
   // Helper function to check if shapes intersect with selection rectangle  
   const getShapesInSelection = (selectionRect) => {
@@ -790,8 +858,14 @@ const Canvas = () => {
     return selectedShapeIds;
   };
 
-  // SINGLE RESPONSIBILITY: Handle ALL mouse interactions (selection, dragging, creation)
+  // === BACKGROUND CLICKS: Handle panning, shape creation, drag-to-select, or clear selection ===
+  // Shapes handle their own clicks via onClick (which only fires if no drag)
   const handleStageMouseDown = (e) => {
+    // Only handle background clicks - shapes handle themselves
+    if (e.target !== e.target.getStage()) {
+      return;
+    }
+    
     const stage = stageRef.current;
     const pointer = stage.getPointerPosition();
     
@@ -801,71 +875,24 @@ const Canvas = () => {
       y: (pointer.y - viewport.y) / viewport.zoom,
     };
         
-    // Middle mouse button = panning (let Konva handle it)
+    // Middle mouse button = panning
     if (e.evt.button === 1) {
-      return; // Let Konva's built-in drag handle panning
+      return;
     }
     
-    // Space key pressed = panning mode, don't start box select
+    // Space key = panning mode
     if (isSpacePressed) {
-      return; // Stage will handle panning since it's draggable when space pressed
+      return;
     }
     
-    // Use Konva's built-in hit detection instead of custom logic
-    const clickedNode = stage.getIntersection(pointer);
-    
-    // Find the shape ID by walking up the node tree if needed
-    // This handles cases where we click on inner nodes (like Text) that don't have IDs
-    let shapeId = null;
-    let currentNode = clickedNode;
-    while (currentNode && !shapeId) {
-      if (currentNode.id() && shapes[currentNode.id()]) {
-        shapeId = currentNode.id();
-        break;
-      }
-      currentNode = currentNode.getParent();
-    }
-    
-    const clickedShape = shapeId ? shapes[shapeId] : null;
-    
-    if (clickedShape) {
-      // === SHAPE CLICK: Handle selection ===
-      
-      if (e.evt.shiftKey) {
-        // Shift+click: Toggle shape in/out of selection (NO DRAGGING)
-        if (selectedIdsSet.has(clickedShape.id)) {
-          removeFromSelection(clickedShape.id);
-        } else {
-          addToSelection(clickedShape.id);
-        }
-        return; // No dragging during multi-select operations
-      } else {
-        // Regular click: Handle selection ONLY
-        if (!selectedIdsSet.has(clickedShape.id)) {
-          // Select single shape (deselect others)
-          setSelectedIds([clickedShape.id]);
-        }
-        // If shape was already selected, keep current selection
-        
-        // Shape interaction now handled entirely by Konva Transformer
-        // No need for manual dragging setup - transformer handles drag/resize/rotate
-      }
-      
-      return; // Handled shape click
-    }
-    
-    // === BACKGROUND CLICK: Handle panning, shape creation, drag-to-select, or clear selection ===
-    if (e.target === e.target.getStage()) {
-      
-      
-      if (createMode) {
+    if (createMode) {
         // ✅ Unified shape creation - eliminates massive code duplication
         const maxZIndex = calculateMaxZIndex(shapes);
         const newShape = createShape({
           type: createMode,
           x: worldPos.x,
           y: worldPos.y,
-          userId: currentUser?.uid || 'unknown',
+          userId: currentUserRef.current?.uid || 'unknown',
           maxZIndex,
         });
         
@@ -910,7 +937,6 @@ const Canvas = () => {
           });
         }
       }
-    }
   };
 
   // Note: Mouse move handling now unified in handleUnifiedMouseMove for performance
@@ -1041,7 +1067,7 @@ const Canvas = () => {
           outline: 'none' // Remove focus outline for better UX
         }}
       >
-        {/* Background Layer */}
+        {/* Background Layer with Grid and Selection Rectangle */}
         <Layer>
           {/* Canvas bounds rectangle */}
           <Rect
@@ -1052,71 +1078,55 @@ const Canvas = () => {
             fill="#2D3748"
             stroke="#4A5568"
             strokeWidth={2}
-            listening={false} // Don't capture clicks - let them go to Stage
+            listening={false}
           />
           
           {/* Grid dots */}
           {generateGridDots()}
-        </Layer>
-        
-        {/* Shapes Layer */}
-        <Layer>
-          {useMemo(() => 
-            Object.values(shapes)
-              .sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0))
-              .map((shape) => (
-                <Shape 
-                  key={shape.id} 
-                  shape={shape} 
-                  onShapeRef={handleShapeRef}
-                  onDragEnd={handleShapePositionUpdate}
-                />
-              )), [shapes, handleShapeRef, handleShapePositionUpdate]
-          )}
           
-          {/* Transformer for selected shapes */}
-          <Transformer
-            ref={transformerRef}
-            {...getTransformConfig()}
-            onTransformStart={handleTransformStart}
-            onTransform={handleTransform}
-            onTransformEnd={handleTransformEnd}
-            shouldOverdrawWholeArea={true}
-            anchorSize={8}
-            anchorStroke="#3B82F6"
-            anchorFill="#FFFFFF"
-            anchorStrokeWidth={2}
-            borderStroke="#3B82F6"
-            borderStrokeWidth={2}
-            borderDash={[4, 4]}
-          />
-        </Layer>
-        
-        {/* Cursors Layer - Above shapes layer */}
-        <Layer>
-          {useMemo(() => 
-            Object.values(users).map((user) => (
-              <Cursor key={user.uid} user={user} />
-            )), [users]
-          )}
-        </Layer>
-        
-        {/* UI Layer - Selection rectangle */}
-        <Layer>
+          {/* Selection rectangle overlay */}
           {isSelecting && (
             <Rect
               x={selectionRect.x}
               y={selectionRect.y}
               width={selectionRect.width}
               height={selectionRect.height}
-              fill="rgba(59, 130, 246, 0.1)" // Light blue fill
-              stroke="#3B82F6" // Blue border
-              strokeWidth={1 / viewport.zoom} // Keep stroke width constant regardless of zoom
-              dash={[5 / viewport.zoom, 5 / viewport.zoom]} // Dashed border
-              listening={false} // Don't capture mouse events
+              fill="rgba(59, 130, 246, 0.1)"
+              stroke="#3B82F6"
+              strokeWidth={1 / viewport.zoom}
+              dash={[5 / viewport.zoom, 5 / viewport.zoom]}
+              listening={false}
             />
           )}
         </Layer>
+        
+        {/* Shapes Layer - Optimized to avoid re-renders on selection change */}
+        <ShapesLayer
+          shapes={shapes}
+          selectedIdsSet={selectedIdsSet}
+          selectionColor={selectionColor}
+          handleShapeRef={handleShapeRef}
+          handleShapeClick={handleShapeClick}
+          handleShapeDragEnd={handleShapeDragEnd}
+        />
+        
+        {/* Transformer Layer - Only re-renders when selection changes */}
+        <TransformerLayer
+          transformerRef={transformerRef}
+          shapeRefs={shapeRefs}
+          selectedIds={selectedIds}
+          transformConfig={getTransformConfig()}
+          onTransformStart={handleTransformStart}
+          onTransform={handleTransform}
+          onTransformEnd={handleTransformEnd}
+          onDragEnd={handleTransformerDragEnd}
+        />
+        
+        {/* Cursors Layer - Above shapes */}
+        <CursorsLayer
+          users={users}
+          viewport={viewport}
+        />
       </Stage>
       
       {/* Text Editor Overlay */}

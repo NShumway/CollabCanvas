@@ -29,7 +29,7 @@ const LOGGING_CONFIG: LoggingConfig = {
   sync: false,
   performance: false,
   userInteractions: false,
-  ai: true,            // Enable AI logging for development
+  ai: false,            // Disable AI logging for performance
   errors: true,
   warnings: true,
 };

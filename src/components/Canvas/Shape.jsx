@@ -3,100 +3,21 @@ import { Rect, Ellipse, Text, Group } from 'react-konva';
 import useCanvasStore from '@/store/canvasStore';
 import { SHAPE_DEFAULTS } from '@/utils/shapeDefaults';
 
-const Shape = React.memo(({ shape, onShapeRef, onDragEnd }) => {
+// Custom comparison for React.memo - only re-render if props actually changed
+const arePropsEqual = (prevProps, nextProps) => {
+  return (
+    prevProps.shape === nextProps.shape &&
+    prevProps.isSelected === nextProps.isSelected &&
+    prevProps.selectionColor === nextProps.selectionColor &&
+    prevProps.onShapeRef === nextProps.onShapeRef &&
+    prevProps.onShapeClick === nextProps.onShapeClick &&
+    prevProps.onShapeDragEnd === nextProps.onShapeDragEnd
+  );
+};
+
+const Shape = React.memo(({ shape, onShapeRef, onShapeClick, onShapeDragEnd, isSelected, selectionColor }) => {
   const shapeRef = useRef();
-  const dragStateRef = useRef({ isDragging: false, startPos: null, startTime: 0 });
-  const selectedIdsSet = useCanvasStore(state => state.selectedIdsSet); // Only subscribe to selection
-  const selectionColor = useCanvasStore(state => state.selectionColor); // Dynamic selection color
-  const editingTextId = useCanvasStore(state => state.editingTextId); // Subscribe to text editing state
-  
-  // Selection actions for handling clicks directly
-  const addToSelection = useCanvasStore(state => state.addToSelection);
-  const removeFromSelection = useCanvasStore(state => state.removeFromSelection);
-  const setSelectedIds = useCanvasStore(state => state.setSelectedIds);
-  
-  const isSelected = selectedIdsSet.has(shape.id); // O(1) instead of O(n)
-  
-  // Smart click vs drag detection constants
-  const DRAG_THRESHOLD = 4; // pixels - if mouse moves more than this, it's a drag
-  const CLICK_TIME_THRESHOLD = 300; // ms - if mouse up happens within this time, could be a click
-  
-  // Handle mouse down - start tracking for click vs drag detection
-  const handleMouseDown = (e) => {
-    const pointer = e.target.getStage().getPointerPosition();
-    dragStateRef.current = {
-      isDragging: false,
-      startPos: { x: pointer.x, y: pointer.y },
-      startTime: Date.now(),
-      isShiftKey: e.evt.shiftKey, // Store shift key state
-    };
-  };
-  
-  // Handle drag start - determine if this is actually a drag or should be treated as a click
-  const handleDragStart = (e) => {
-    const pointer = e.target.getStage().getPointerPosition();
-    const { startPos, startTime, isShiftKey } = dragStateRef.current;
-    
-    if (!startPos) {
-      // Fallback - allow drag if we don't have start position
-      dragStateRef.current.isDragging = true;
-      e.cancelBubble = true;
-      return;
-    }
-    
-    const distance = Math.sqrt(
-      Math.pow(pointer.x - startPos.x, 2) + Math.pow(pointer.y - startPos.y, 2)
-    );
-    const timeDiff = Date.now() - startTime;
-    
-    if (distance > DRAG_THRESHOLD || timeDiff > CLICK_TIME_THRESHOLD) {
-      // This is a real drag - proceed normally
-      dragStateRef.current.isDragging = true;
-      e.cancelBubble = true; // Prevent stage from receiving this drag event
-    } else {
-      // This is a click - handle selection directly
-      dragStateRef.current.isDragging = false;
-      e.target.stopDrag();
-      
-      // Handle selection logic directly since we can't bubble to Canvas
-      if (isShiftKey) {
-        // Shift+click: Toggle shape in/out of selection
-        if (selectedIdsSet.has(shape.id)) {
-          removeFromSelection(shape.id);
-        } else {
-          addToSelection(shape.id);
-        }
-      } else {
-        // Regular click: Select this shape (deselect others if not already selected)
-        if (!selectedIdsSet.has(shape.id)) {
-          setSelectedIds([shape.id]);
-        }
-        // If shape was already selected, keep current selection for multi-select operations
-      }
-      
-      return;
-    }
-  };
-
-  // Update React state during drag to keep Konva and React in sync
-  const handleDragMove = (e) => {
-    if (!dragStateRef.current.isDragging) return;
-    
-    e.cancelBubble = true; // Prevent stage from receiving this drag event
-    const node = e.target;
-    if (onDragEnd) {
-      // Update React state immediately during drag
-      onDragEnd(shape.id, node.x(), node.y());
-    }
-  };
-
-  // Handle drag end
-  const handleDragEndCallback = (e) => {
-    if (!dragStateRef.current.isDragging) return;
-    
-    e.cancelBubble = true; // Prevent stage from receiving this drag event
-    dragStateRef.current.isDragging = false;
-  };
+  const editingTextId = useCanvasStore(state => state.editingTextId);
   
   // Pass ref back to parent for transformer attachment
   useEffect(() => {
@@ -105,12 +26,30 @@ const Shape = React.memo(({ shape, onShapeRef, onDragEnd }) => {
     }
   }, [shape.id, onShapeRef]);
   
-  // Default shape styles (Figma-like) - consistent across all shapes
-  // Uses dynamic selection color that adapts to avoid conflicts with shape colors
+  // Handle clicks (fires only if NOT dragging)
+  const handleClick = (e) => {
+    if (onShapeClick) {
+      onShapeClick(shape.id, e.evt.shiftKey);
+    }
+  };
+  
+  // Handle drag end (persist position after drag)
+  const handleDragEnd = (e) => {
+    if (onShapeDragEnd && shapeRef.current) {
+      onShapeDragEnd(shape.id, shapeRef.current);
+    }
+  };
+  
+  // ARCHITECTURE: Shapes handle their own clicks, Transformer handles drags
+  // onClick only fires if no drag occurred - Konva handles this automatically
   const baseStyle = {
     fill: shape.fill ?? SHAPE_DEFAULTS.FILL,
     stroke: isSelected ? selectionColor : 'transparent',
     strokeWidth: isSelected ? SHAPE_DEFAULTS.SELECTION_STROKE_WIDTH : 0,
+    listening: true,
+    draggable: true, // Must be draggable for Transformer to work
+    onClick: handleClick, // Only fires if no drag
+    onDragEnd: handleDragEnd, // Persist position after drag
   };
   
   // Render based on shape type
@@ -134,11 +73,6 @@ const Shape = React.memo(({ shape, onShapeRef, onDragEnd }) => {
           height={height}
           rotation={(shape.rotation || 0) * 180 / Math.PI}
           {...baseStyle}
-          draggable={true}
-          onMouseDown={handleMouseDown}
-          onDragStart={handleDragStart}
-          onDragMove={handleDragMove}
-          onDragEnd={handleDragEndCallback}
         />
       );
     }
@@ -160,33 +94,45 @@ const Shape = React.memo(({ shape, onShapeRef, onDragEnd }) => {
           radiusY={height / 2}
           rotation={(shape.rotation || 0) * 180 / Math.PI}
           {...baseStyle}
-          draggable={true}
-          onMouseDown={handleMouseDown}
-          onDragStart={handleDragStart}
-          onDragMove={handleDragMove}
-          onDragEnd={handleDragEndCallback}
         />
       );
     }
       
-    // Removed: line case (line shapes eliminated)
-      
     case 'text': {
       // Don't render text shapes that are currently being edited
-      // This prevents double text (overlay + original) during editing
+      // The DOM input overlay handles the editing experience
       if (editingTextId === shape.id) {
-        return null;
+        return null; // Let DOM overlay handle the editing
       }
-
-      // Store has center coordinates, Konva needs center for proper rotation
+      
       const centerX = shape.x ?? 0;
       const centerY = shape.y ?? 0;
       const width = shape.width ?? SHAPE_DEFAULTS.TEXT_WIDTH;
       const height = shape.height ?? SHAPE_DEFAULTS.TEXT_HEIGHT;
-      const textFill = shape.fill ?? SHAPE_DEFAULTS.FILL;
+      
+      // Text styles with proper defaults
+      const textStyle = {
+        ...baseStyle,
+        fontSize: shape.fontSize ?? SHAPE_DEFAULTS.FONT_SIZE,
+        fontFamily: shape.fontFamily ?? SHAPE_DEFAULTS.FONT_FAMILY,
+        align: shape.align ?? SHAPE_DEFAULTS.TEXT_ALIGN,
+        verticalAlign: 'middle',
+        width: width,
+        height: height,
+        wrap: 'word',
+        // Text formatting
+        fontStyle: [
+          shape.bold ? 'bold' : '',
+          shape.italic ? 'italic' : ''
+        ].filter(Boolean).join(' ') || 'normal',
+        textDecoration: [
+          shape.underline ? 'underline' : '',
+          shape.strikethrough ? 'line-through' : ''
+        ].filter(Boolean).join(' ') || '',
+      };
       
       return (
-        <Group 
+        <Group
           ref={shapeRef}
           id={shape.id}
           x={centerX}
@@ -196,57 +142,37 @@ const Shape = React.memo(({ shape, onShapeRef, onDragEnd }) => {
           width={width}
           height={height}
           rotation={(shape.rotation || 0) * 180 / Math.PI}
-          draggable={true}
-          onMouseDown={handleMouseDown}
-          onDragStart={handleDragStart}
-          onDragMove={handleDragMove}
-          onDragEnd={handleDragEndCallback}
+          listening={true}
+          draggable={false}
         >
-          {/* Selection background for text (when selected) */}
-          {isSelected && (
-            <Rect
-              x={0}
-              y={0}
-              width={width}
-              height={height}
-              fill="transparent"
-              stroke={selectionColor}
-              strokeWidth={SHAPE_DEFAULTS.SELECTION_STROKE_WIDTH}
-              listening={false}
-            />
-          )}
-          
-          {/* Text with preserved color */}
+          {/* Container rectangle for visual boundaries */}
+          <Rect
+            x={0}
+            y={0}
+            width={width}
+            height={height}
+            fill="transparent"
+            stroke={isSelected ? selectionColor : 'transparent'}
+            strokeWidth={isSelected ? 1 : 0}
+            dash={isSelected ? [5, 5] : []}
+          />
+          {/* Text content */}
           <Text
             x={0}
             y={0}
-            text={shape.text ?? SHAPE_DEFAULTS.TEXT_CONTENT}
-            fontSize={shape.fontSize ?? SHAPE_DEFAULTS.TEXT_FONT_SIZE}
-            fontFamily={shape.fontFamily ?? SHAPE_DEFAULTS.TEXT_FONT_FAMILY}
-            fontStyle={(() => {
-              const bold = shape.bold ? 'bold' : 'normal';
-              const italic = shape.italic ? 'italic' : '';
-              return italic ? `${bold} ${italic}` : bold;
-            })()}
-            textDecoration={(() => {
-              const decorations = [];
-              if (shape.underline) decorations.push('underline');
-              if (shape.strikethrough) decorations.push('line-through');
-              return decorations.join(' ');
-            })()}
-            align={shape.textAlign ?? SHAPE_DEFAULTS.TEXT_ALIGN}
-            width={width}
-            height={height}
-            fill={textFill} // 🎯 Always preserve the actual text color
+            text={shape.text ?? 'Text'}
+            {...textStyle}
           />
         </Group>
       );
     }
       
-    default:
+    default: {
+      console.warn(`Unknown shape type: ${shape.type}`);
       return null;
+    }
   }
-});
+}, arePropsEqual); // Custom comparison to prevent unnecessary re-renders
 
 Shape.displayName = 'Shape';
 

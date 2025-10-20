@@ -124,6 +124,8 @@ graph TB
 4. **Component Isolation** — Shape, Cursor, Comments, and AI systems each operate in their own layer with distinct listeners and writes.
 5. **Conflict Resolution** — Timestamp-based "last write wins" ensures deterministic updates without locking.
 6. **Resilience** — Connection state tracking allows reconnection without data loss. Firestore ensures persistence.
+7. **Performance Optimized** — Single store selector with shallow equality, Firestore docChanges() optimization, batched updates, refs for callback-only values.
+8. **Event Handling Pattern** — Shapes handle clicks (selection), Konva Transformer handles drags (movement/resize/rotate), Canvas handles background (creation/box-select).
 
 ---
 

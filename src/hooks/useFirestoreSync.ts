@@ -36,6 +36,7 @@ export const useFirestoreSync = (): void => {
   /**
    * Handle remote shape changes from Firestore
    * Implements critical echo prevention and timestamp-based conflict resolution
+   * PERFORMANCE: Batches updates to minimize re-renders
    */
   const handleRemoteChanges = useCallback((changes: FirestoreDocumentChange[], error?: FirebaseError) => {
     if (error) {
@@ -44,6 +45,11 @@ export const useFirestoreSync = (): void => {
     }
     
     if (!changes || changes.length === 0) return;
+    
+    // PERFORMANCE: Batch process changes to avoid multiple store updates
+    const shapesToAdd: any[] = [];
+    const shapesToUpdate: any[] = [];
+    const shapesToRemove: string[] = [];
     
     changes.forEach(change => {
       const { type, data, id, hasPendingWrites: docHasPendingWrites } = change;
@@ -62,18 +68,23 @@ export const useFirestoreSync = (): void => {
       
       switch (type) {
         case 'added':
+          shapesToAdd.push({ id, data });
+          break;
         case 'modified':
-          handleShapeUpdate(id, data, type === 'added');
+          shapesToUpdate.push({ id, data });
           break;
-          
         case 'removed':
-          removeShape(id);
+          shapesToRemove.push(id);
           break;
-          
         default:
           devLog.warn('Unknown change type:', type);
       }
     });
+    
+    // PERFORMANCE: Batch apply all changes in one go
+    shapesToAdd.forEach(({ id, data }) => handleShapeUpdate(id, data, true));
+    shapesToUpdate.forEach(({ id, data }) => handleShapeUpdate(id, data, false));
+    shapesToRemove.forEach(id => removeShape(id));
   }, [updateShape, addShape, removeShape, hasPendingWrite]);
   
   /**
