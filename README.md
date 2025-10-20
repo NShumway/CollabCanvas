@@ -24,7 +24,6 @@ Test with multiple browsers to see real-time collaboration in action!
 ### ✅ Interaction & Navigation
 - **Pan & Zoom** - Smooth 60 FPS navigation with mouse/trackpad
 - **Space + Drag Panning** - Figma-style panning with Space key
-- **Viewport Persistence** - Your zoom and pan position saves to Firestore and restores on reload
 - **Window Resize Handling** - Canvas adapts gracefully to window resizing, toolbars stay positioned
 - **Multi-shape Dragging** - Select and move multiple shapes together
 - **Arrow Key Nudging** - Fine-tune shape positions with arrow keys (10px) or Shift+Arrow (50px)
@@ -40,23 +39,62 @@ Test with multiple browsers to see real-time collaboration in action!
 
 ### 🎹 Keyboard Shortcuts
 
+**Selection & Navigation:**
 | Shortcut | Action |
 |----------|---------|
+| **V** | Select tool (pointer mode) |
 | **Space + Drag** | Pan around canvas |
-| **Click + Drag** | Select shapes / Create selection rectangle |
-| **Shift + Click** | Add/remove shapes from selection |
-| **Delete / Backspace** | Delete selected shapes |
+| **Mouse Wheel** | Zoom in/out |
 | **Ctrl + A** | Select all shapes |
-| **Ctrl + D** | Duplicate selected shapes |
-| **Ctrl + C** | Copy selected shapes to clipboard |
-| **Ctrl + V** | Paste shapes from clipboard |
-| **Ctrl + ]** | Bring selected shapes forward |
-| **Ctrl + [** | Send selected shapes backward |
-| **Arrow Keys** | Nudge selected shapes (10px) |
-| **Shift + Arrow** | Nudge selected shapes (50px) |
-| **Ctrl + K** | Open AI chat panel (when available) |
-| **Ctrl + ?** | Show keyboard shortcuts help |
+| **Click + Drag** | Drag selection rectangle |
+| **Shift + Click** | Add/remove shapes from selection |
 | **Escape** | Clear selection and exit create mode |
+
+**Shape Creation:**
+| Shortcut | Action |
+|----------|---------|
+| **R** | Rectangle tool |
+| **C** | Ellipse/Circle tool |
+| **T** | Text tool |
+
+**Editing:**
+| Shortcut | Action |
+|----------|---------|
+| **Delete / Backspace** | Delete selected shapes |
+| **Ctrl + D** | Duplicate selected shapes (20px offset) |
+| **Ctrl + C** | Copy selected shapes to clipboard |
+| **Ctrl + V** | Paste shapes at cursor position |
+| **Arrow Keys** | Nudge selected shapes 10px |
+| **Shift + Arrow** | Nudge selected shapes 50px |
+| **Double-click** | Edit text shape |
+
+**Layer Management:**
+| Shortcut | Action |
+|----------|---------|
+| **Ctrl + ]** | Bring selected shapes forward one layer |
+| **Ctrl + [** | Send selected shapes backward one layer |
+| **Ctrl + Shift + ]** | Bring selected shapes to front |
+| **Ctrl + Shift + [** | Send selected shapes to back |
+
+**Transform:**
+| Shortcut | Action |
+|----------|---------|
+| **Shift + A** | Toggle aspect ratio lock |
+| **Drag Handles** | Resize shapes |
+| **Rotate Handle** | Rotate shapes |
+
+**Text Formatting** (when text selected):
+| Shortcut | Action |
+|----------|---------|
+| **Ctrl + B** | Toggle bold |
+| **Ctrl + I** | Toggle italic |
+| **Ctrl + U** | Toggle underline |
+
+**Other:**
+| Shortcut | Action |
+|----------|---------|
+| **Ctrl + K** | Open AI chat panel |
+| **Ctrl + ?** | Show keyboard shortcuts help modal |
 
 ### 📱 Interaction Guide
 
@@ -76,10 +114,11 @@ Test with multiple browsers to see real-time collaboration in action!
 3. Use Ctrl+] / Ctrl+[ shortcuts for quick layer changes
 
 **Copy/Paste & Duplication:**
-1. Select shapes you want to copy
-2. Press Ctrl+C to copy (or Ctrl+D to duplicate immediately)
-3. Press Ctrl+V to paste with automatic offset
-4. Relative positions are preserved for multi-shape copies
+1. **Copy (Ctrl+C)**: Select shapes and press Ctrl+C to copy to clipboard
+2. **Paste (Ctrl+V)**: Move cursor to desired location and press Ctrl+V - shapes appear at cursor position
+3. **Duplicate (Ctrl+D)**: Press Ctrl+D to duplicate with 20px offset from original position
+4. Relative positions between shapes are preserved in all operations
+5. Paste behavior: Center of copied shapes appears at your cursor location
 
 **Canvas Export:**
 1. Click the Export button in toolbar
@@ -397,7 +436,7 @@ canvases/{canvasId}/
 │   ├── color: string
 │   ├── online: boolean
 │   ├── lastSeen: ServerTimestamp
-│   └── viewport: { x, y, zoom, updatedAt } # Per-user viewport persistence
+│   └── viewport: { x, y, zoom, updatedAt } # (Viewport save works but restore doesn't)
 └── metadata              # Canvas metadata
     ├── createdAt: ServerTimestamp
     └── createdBy: string
@@ -409,12 +448,12 @@ canvases/{canvasId}/
 - ✅ **Multi-select and layer management** - Drag-to-select, z-index controls, Layer Panel
 - ✅ **Delete and duplicate operations** - Full keyboard shortcut support
 - ✅ **Enhanced interaction** - Space+drag panning, multi-shape operations
-- ✅ **Copy/Paste system** - Clipboard support with relative positioning
-- ✅ **Canvas Export** - Export to PNG, SVG, or JSON formats
+- ✅ **Copy/Paste system** - Clipboard support with cursor-based pasting
+- ✅ **Canvas Export** - Export full canvas to PNG, SVG, or JSON formats
 - ✅ **Window Resize Handling** - Graceful canvas adaptation to window changes
-- ✅ **Viewport Persistence** - Per-user zoom/pan saved to Firestore
-- ✅ **Arrow Key Nudging** - Fine-grained shape positioning control
+- ✅ **Arrow Key Nudging** - Fine-grained shape positioning control (10px/50px)
 - ✅ **Keyboard Shortcuts Help** - Comprehensive shortcut reference (Ctrl+?)
+- ✅ **Alignment & Distribution** - Align and distribute multi-selected shapes
 
 ### 🚧 Phase 2: Additional Shapes (Next)
 - Ellipse and text shape types
@@ -444,6 +483,7 @@ canvases/{canvasId}/
 - **Minimal interface:** Very basic toolbar and UI styling
 - **Username scaling:** User labels zoom with canvas content instead of staying readable
 - **Update dependencies:** Some UI components (like active users list) only refresh during mouse movement
+- **Viewport persistence:** Zoom/pan position doesn't restore on reload (save works but load has timing issues)
 
 ### Technical Limitations:
 - **Presence detection delay:** Takes ~30 seconds to detect when users close their browser tab

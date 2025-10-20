@@ -53,13 +53,21 @@ export interface CanvasStoreState {
   // Transform state
   aspectLock: boolean;
   
+  // Clipboard state (PR #16)
+  clipboard: ClipboardState;
+  
+  // Viewport persistence (PR #16)
+  viewportSaveDebounceTimer: NodeJS.Timeout | null;
+  
+  // Help modal state (PR #16)
+  showHelpModal: boolean;
+  
   // AI state (PR #12+)
   aiCommands: Record<string, AICommand>;
   chatMessages: ChatMessage[];
   isAIProcessing: boolean;
   
   // Future features (for upcoming PRs)
-  // clipboard: ClipboardState;
   // recentColors: string[];
   // savedColors: string[];
   // comments: CommentCollection;
@@ -119,7 +127,25 @@ export interface CanvasStoreActions {
   setAspectLock: (aspectLock: boolean) => void;
   toggleAspectLock: () => void;
   
-  // AI actions TEMPORARILY REMOVED - TODO: Add back when store issues resolved
+  // Clipboard actions (PR #16)
+  copySelectedShapes: () => void;
+  pasteShapes: (cursorPosition?: { x: number; y: number }) => void;
+  
+  // Help modal actions (PR #16)
+  setShowHelpModal: (show: boolean) => void;
+  toggleHelpModal: () => void;
+  
+  // Viewport persistence actions (PR #16)
+  setViewportSaveDebounceTimer: (timer: NodeJS.Timeout | null) => void;
+  
+  // AI actions (PR #12+)
+  addChatMessage: (message: ChatMessage) => void;
+  clearChatMessages: () => void;
+  setAIProcessing: (isProcessing: boolean) => void;
+  addAICommand: (commandId: string, command: AICommand) => void;
+  updateAICommand: (commandId: string, updates: Partial<AICommand>) => void;
+  removeAICommand: (commandId: string) => void;
+  clearAICommands: () => void;
   
   // Dynamic selection color actions
   updateSelectionColor: () => void;

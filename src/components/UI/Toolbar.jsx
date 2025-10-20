@@ -3,6 +3,7 @@ import useCanvasStore from '@/store/canvasStore';
 import { createSyncEngine } from '@/services/syncEngine';
 import { calculateTextHeight } from '@/utils/textMeasurement';
 import { alignShapes, distributeShapes, getAlignmentAvailability } from '@/utils/alignment';
+import { exportAsPNG, exportAsSVG, exportAsJSON } from '@/utils/canvasExport';
 import ColorPicker from './ColorPicker';
 
 const Toolbar = () => {
@@ -20,8 +21,11 @@ const Toolbar = () => {
   
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [colorPickerPosition, setColorPickerPosition] = useState({ x: 0, y: 0 });
+  const [showExportMenu, setShowExportMenu] = useState(false);
   const colorButtonRef = useRef(null);
+  const exportButtonRef = useRef(null);
   const syncEngineRef = useRef(null);
+  const stageRef = useRef(null);
 
   // Initialize sync engine
   useEffect(() => {
@@ -182,6 +186,163 @@ const Toolbar = () => {
     } catch (error) {
       console.error('Error during distribution:', error);
     }
+  };
+
+  // Export handlers
+  const handleExport = (format) => {
+    const viewport = useCanvasStore.getState().viewport;
+    const users = useCanvasStore.getState().users;
+    
+    const metadata = {
+      exportDate: new Date().toISOString(),
+      shapeCount: Object.keys(shapes).length,
+      userCount: Object.keys(users).length,
+      canvasId: 'default-canvas',
+      version: '1.0.0',
+    };
+    
+    const options = {
+      format,
+      fullCanvas: true,
+      filename: `canvas-${format}-${Date.now()}.${format}`,
+      includeMetadata: true,
+    };
+    
+    if (format === 'png') {
+      // Calculate bounds of all shapes
+      const shapesArray = Object.values(shapes);
+      if (shapesArray.length === 0) {
+        alert('No shapes to export!');
+        return;
+      }
+      
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      
+      shapesArray.forEach(shape => {
+        const x1 = shape.x;
+        const y1 = shape.y;
+        const x2 = shape.x + (shape.width || 0);
+        const y2 = shape.y + (shape.height || 0);
+        
+        minX = Math.min(minX, x1);
+        minY = Math.min(minY, y1);
+        maxX = Math.max(maxX, x2);
+        maxY = Math.max(maxY, y2);
+      });
+      
+      // Add padding
+      const padding = 40;
+      minX -= padding;
+      minY -= padding;
+      maxX += padding;
+      maxY += padding;
+      
+      const width = maxX - minX;
+      const height = maxY - minY;
+      
+      // Create export canvas
+      const exportCanvas = document.createElement('canvas');
+      exportCanvas.width = width;
+      exportCanvas.height = height;
+      const ctx = exportCanvas.getContext('2d');
+      
+      // Fill with white background
+      ctx.fillStyle = '#1F2937'; // Match canvas background color
+      ctx.fillRect(0, 0, width, height);
+      
+      // Sort shapes by z-index
+      const sortedShapes = shapesArray.sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
+      
+      // Draw all shapes
+      sortedShapes.forEach(shape => {
+        ctx.save();
+        
+        const x = shape.x - minX;
+        const y = shape.y - minY;
+        
+        // Handle rotation
+        if (shape.rotation) {
+          const centerX = x + (shape.width || 0) / 2;
+          const centerY = y + (shape.height || 0) / 2;
+          ctx.translate(centerX, centerY);
+          ctx.rotate(shape.rotation);
+          ctx.translate(-centerX, -centerY);
+        }
+        
+        ctx.fillStyle = shape.fill || '#000000';
+        
+        if (shape.type === 'rectangle') {
+          ctx.fillRect(x, y, shape.width || 100, shape.height || 100);
+        } else if (shape.type === 'ellipse') {
+          const centerX = x + (shape.width || 100) / 2;
+          const centerY = y + (shape.height || 100) / 2;
+          const radiusX = (shape.width || 100) / 2;
+          const radiusY = (shape.height || 100) / 2;
+          
+          ctx.beginPath();
+          ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (shape.type === 'text') {
+          const fontSize = shape.fontSize || 16;
+          const fontFamily = shape.fontFamily || 'Inter, sans-serif';
+          const fontWeight = shape.bold ? 'bold' : 'normal';
+          const fontStyle = shape.italic ? 'italic' : 'normal';
+          
+          ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}`;
+          ctx.textBaseline = 'top';
+          ctx.textAlign = shape.textAlign || 'left';
+          
+          // Handle text alignment
+          let textX = x;
+          if (shape.textAlign === 'center') {
+            textX = x + (shape.width || 200) / 2;
+          } else if (shape.textAlign === 'right') {
+            textX = x + (shape.width || 200);
+          }
+          
+          // Draw text with decorations
+          const text = shape.text || 'Text';
+          ctx.fillText(text, textX, y);
+          
+          // Underline
+          if (shape.underline) {
+            const metrics = ctx.measureText(text);
+            ctx.beginPath();
+            ctx.moveTo(textX, y + fontSize);
+            ctx.lineTo(textX + metrics.width, y + fontSize);
+            ctx.strokeStyle = shape.fill || '#000000';
+            ctx.stroke();
+          }
+          
+          // Strikethrough
+          if (shape.strikethrough) {
+            const metrics = ctx.measureText(text);
+            ctx.beginPath();
+            ctx.moveTo(textX, y + fontSize / 2);
+            ctx.lineTo(textX + metrics.width, y + fontSize / 2);
+            ctx.strokeStyle = shape.fill || '#000000';
+            ctx.stroke();
+          }
+        }
+        
+        ctx.restore();
+      });
+      
+      // Export
+      const dataURL = exportCanvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.href = dataURL;
+      link.download = options.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else if (format === 'svg') {
+      exportAsSVG(shapes, viewport, options);
+    } else if (format === 'json') {
+      exportAsJSON(shapes, viewport, options, metadata);
+    }
+    
+    setShowExportMenu(false);
   };
 
   // Get current properties from selected text shapes (use first shape as reference)
@@ -419,6 +580,64 @@ const Toolbar = () => {
             </div>
           </>
         )}
+        
+        {/* Export Button */}
+        <div className="w-px h-6 bg-gray-600" />
+        
+        <div className="relative">
+          <button
+            ref={exportButtonRef}
+            onClick={() => setShowExportMenu(!showExportMenu)}
+            className={toolButtonClass(showExportMenu)}
+            title="Export Canvas"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+          </button>
+          
+          {/* Export Menu Dropdown */}
+          {showExportMenu && (
+            <div className="absolute top-full left-0 mt-2 w-48 bg-gray-700 border border-gray-600 rounded-lg shadow-xl z-50">
+              <div className="p-2 space-y-1">
+                <button
+                  onClick={() => handleExport('png')}
+                  className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-600 hover:text-white rounded transition-colors flex items-center gap-2"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
+                  </svg>
+                  Export as PNG
+                </button>
+                <button
+                  onClick={() => handleExport('svg')}
+                  className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-600 hover:text-white rounded transition-colors flex items-center gap-2"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polygon points="12 2 2 7 12 12 22 7 12 2" />
+                    <polyline points="2 17 12 22 22 17" />
+                    <polyline points="2 12 12 17 22 12" />
+                  </svg>
+                  Export as SVG
+                </button>
+                <button
+                  onClick={() => handleExport('json')}
+                  className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-600 hover:text-white rounded transition-colors flex items-center gap-2"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="12" y1="18" x2="12" y2="12" />
+                    <line x1="9" y1="15" x2="15" y2="15" />
+                  </svg>
+                  Export as JSON
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
         
         {/* Status and Hints / Text Formatting Controls */}
         <div className="flex-1 flex items-center justify-center">

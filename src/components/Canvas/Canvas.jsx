@@ -4,6 +4,7 @@ import { useShallow } from 'zustand/react/shallow';
 import useCanvasStore from '@/store/canvasStore';
 import { useFirestoreSync } from '@/hooks/useFirestoreSync';
 import { useCursorSync } from '@/hooks/useCursorSync';
+import { useViewportPersistence } from '@/hooks/useViewportPersistence';
 import { createSyncEngine } from '@/services/syncEngine';
 import { createShape, calculateMaxZIndex } from '@/utils/shapeCreation';
 import { SHAPE_DEFAULTS } from '@/utils/shapeDefaults';
@@ -30,6 +31,7 @@ const Canvas = () => {
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionRect, setSelectionRect] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const [isSpacePressed, setIsSpacePressed] = useState(false);
+  const [lastCursorPosition, setLastCursorPosition] = useState({ x: 0, y: 0 }); // Track cursor for paste
   
   // Transform state
   const [isTransforming, setIsTransforming] = useState(false);
@@ -95,6 +97,9 @@ const Canvas = () => {
   
   // CURSOR SYNC: Real-time cursor positions (separate from shape sync)
   const { writeCursorPosition } = useCursorSync();
+  
+  // VIEWPORT PERSISTENCE: Save/restore user's viewport position
+  useViewportPersistence();
   
   // WRITE PATH: Initialize SyncEngine for writing to Firestore
   useEffect(() => {
@@ -235,6 +240,9 @@ const Canvas = () => {
       y: e.clientY - rect.top,
     };
     
+    // Track cursor position for paste operation
+    setLastCursorPosition(pointer);
+    
     // Handle each responsibility separately
     handleCursorUpdate(pointer);
     handleSelectionRectangle(pointer);
@@ -265,19 +273,37 @@ const Canvas = () => {
   }, [handleMouseMove]);
   
   // Update canvas dimensions (account for header + toolbar)
+  // Handles window resize gracefully - canvas top-left stays anchored, shows more/less space
   useEffect(() => {
     const updateSize = () => {
       const headerHeight = 48; // h-12 = 48px
       const toolbarHeight = 64; // Base toolbar height (can expand to 96px with text controls)
+      const sidebarWidth = 256; // w-64 = 256px
       
+      // Calculate available canvas dimensions
+      // Canvas top-left position stays the same, we just show more/less canvas space
       setDimensions({
-        width: window.innerWidth - 256, // Account for 256px sidebar (w-64)
+        width: window.innerWidth - sidebarWidth,
         height: window.innerHeight - (headerHeight + toolbarHeight),
       });
     };
     
+    // Initial size
     updateSize();
-    // Note: Window resize handling will be added after MVP
+    
+    // Window resize handling - debounced for performance
+    let resizeTimer;
+    const handleResize = () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(updateSize, 100); // 100ms debounce
+    };
+    
+    window.addEventListener('resize', handleResize);
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      clearTimeout(resizeTimer);
+    };
   }, []);
   
   // Handle keyboard shortcuts (Figma-style)
@@ -351,16 +377,100 @@ const Canvas = () => {
         selectAll();
       }
       
-      // R - Rectangle tool
-      if (e.key === 'r' || e.key === 'R') {
+      // Ctrl+C - Copy selected shapes
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+        const currentSelectedIds = useCanvasStore.getState().selectedIds;
+        if (currentSelectedIds.length > 0) {
+          e.preventDefault();
+          useCanvasStore.getState().copySelectedShapes();
+        }
+      }
+      
+      // Ctrl+V - Paste shapes at cursor position
+      if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+        e.preventDefault();
+        const currentState = useCanvasStore.getState();
+        
+        // Convert screen cursor position to canvas coordinates
+        const stage = stageRef.current;
+        if (stage) {
+          const canvasPos = {
+            x: (lastCursorPosition.x - viewport.x) / viewport.zoom,
+            y: (lastCursorPosition.y - viewport.y) / viewport.zoom,
+          };
+          
+          // Paste shapes at cursor position
+          currentState.pasteShapes(canvasPos);
+          
+          // Sync pasted shapes via SyncEngine
+          const updatedState = useCanvasStore.getState();
+          updatedState.selectedIds.forEach(shapeId => {
+            const shape = updatedState.shapes[shapeId];
+            if (shape && syncEngineRef.current) {
+              syncEngineRef.current.applyLocalChange(shape.id, shape);
+              syncEngineRef.current.queueWrite(shape.id, shape, true);
+            }
+          });
+        }
+      }
+      
+      // Ctrl+? or Ctrl+/ - Show help modal
+      if ((e.ctrlKey || e.metaKey) && (e.key === '?' || e.key === '/')) {
+        e.preventDefault();
+        useCanvasStore.getState().toggleHelpModal();
+      }
+      
+      // Arrow keys - Nudge selected shapes (10px or 50px with Shift)
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        const currentSelectedIds = useCanvasStore.getState().selectedIds;
+        if (currentSelectedIds.length > 0) {
+          e.preventDefault();
+          const nudgeAmount = e.shiftKey ? 50 : 10;
+          const currentState = useCanvasStore.getState();
+          
+          currentSelectedIds.forEach(shapeId => {
+            const shape = currentState.shapes[shapeId];
+            if (!shape) return;
+            
+            let updateData = {
+              updatedBy: currentUserRef.current?.uid || 'unknown',
+              clientTimestamp: Date.now()
+            };
+            
+            // Calculate new position based on arrow key
+            if (e.key === 'ArrowUp') {
+              updateData.y = shape.y - nudgeAmount;
+            } else if (e.key === 'ArrowDown') {
+              updateData.y = shape.y + nudgeAmount;
+            } else if (e.key === 'ArrowLeft') {
+              updateData.x = shape.x - nudgeAmount;
+            } else if (e.key === 'ArrowRight') {
+              updateData.x = shape.x + nudgeAmount;
+            }
+            
+            // Apply locally first
+            useCanvasStore.getState().updateShape(shapeId, updateData);
+            
+            // Sync via SyncEngine
+            if (syncEngineRef.current) {
+              const updatedShape = { ...shape, ...updateData };
+              syncEngineRef.current.applyLocalChange(shapeId, updateData);
+              syncEngineRef.current.queueWrite(shapeId, updatedShape, true);
+            }
+          });
+        }
+      }
+      
+      // R - Rectangle tool (only if Ctrl is NOT pressed)
+      if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey) {
         if (!createMode || createMode !== 'rectangle') {
           e.preventDefault();
           setCreateMode('rectangle');
         }
       }
       
-      // C - Ellipse tool
-      if (e.key === 'c' || e.key === 'C') {
+      // C - Ellipse tool (only if Ctrl is NOT pressed, to avoid conflict with Ctrl+C copy)
+      if ((e.key === 'c' || e.key === 'C') && !e.ctrlKey && !e.metaKey) {
         if (!createMode || createMode !== 'ellipse') {
           e.preventDefault();
           setCreateMode('ellipse');
@@ -369,16 +479,16 @@ const Canvas = () => {
       
       // L - Line tool (removed)
       
-      // T - Text tool
-      if (e.key === 't' || e.key === 'T') {
+      // T - Text tool (only if Ctrl is NOT pressed)
+      if ((e.key === 't' || e.key === 'T') && !e.ctrlKey && !e.metaKey) {
         if (!createMode || createMode !== 'text') {
           e.preventDefault();
           setCreateMode('text');
         }
       }
       
-      // V - Select tool (clear create mode)
-      if (e.key === 'v' || e.key === 'V') {
+      // V - Select tool (clear create mode) - only if Ctrl is NOT pressed to avoid conflict with Ctrl+V paste
+      if ((e.key === 'v' || e.key === 'V') && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
         clearCreateMode();
       }

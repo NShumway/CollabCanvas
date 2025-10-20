@@ -44,6 +44,18 @@ const useCanvasStore = create<CanvasStore>((set, get) => ({
   // Transform state
   aspectLock: false, // Whether aspect ratio should be maintained during transforms
   
+  // Clipboard state
+  clipboard: {
+    shapes: [],
+    timestamp: 0,
+  },
+  
+  // Viewport persistence
+  viewportSaveDebounceTimer: null as NodeJS.Timeout | null,
+  
+  // Help modal state
+  showHelpModal: false,
+  
   // AI state
   aiCommands: {},
   chatMessages: [],
@@ -570,6 +582,126 @@ const useCanvasStore = create<CanvasStore>((set, get) => ({
   setConnectionState: (connectionState) => set({ connectionState }),
   
   setLastSyncTimestamp: (timestamp: number = Date.now()) => set({ lastSyncTimestamp: timestamp }),
+  
+  // Clipboard actions
+  copySelectedShapes: () => {
+    const state = get();
+    const shapesToCopy = state.selectedIds
+      .map(id => state.shapes[id])
+      .filter(Boolean) as Shape[];
+    
+    set({
+      clipboard: {
+        shapes: shapesToCopy,
+        timestamp: Date.now(),
+      }
+    });
+  },
+  
+  pasteShapes: (cursorPosition?: { x: number; y: number }) => {
+    const state = get();
+    if (state.clipboard.shapes.length === 0) return;
+    
+    const newShapes = { ...state.shapes };
+    const newSelectedIds: string[] = [];
+    
+    // Helper to find available z-index
+    const findInsertionZIndex = (originalZIndex: number, allShapes: Record<string, Shape>): number => {
+      const allZIndices = Object.values(allShapes).map(s => s.zIndex || 0);
+      const targetZIndex = originalZIndex + 1;
+      
+      if (!allZIndices.includes(targetZIndex)) {
+        return targetZIndex;
+      }
+      
+      const sorted = allZIndices.filter(z => z > originalZIndex).sort((a, b) => a - b);
+      const nextZIndex = sorted[0];
+      
+      if (!nextZIndex) {
+        return targetZIndex;
+      }
+      
+      return (originalZIndex + nextZIndex) / 2;
+    };
+    
+    // Calculate the center of the clipboard shapes for cursor-based positioning
+    let offsetX = 0;
+    let offsetY = 0;
+    
+    if (cursorPosition) {
+      // Find the bounds of the clipboard shapes
+      const bounds = state.clipboard.shapes.reduce(
+        (acc, shape) => {
+          const left = shape.x;
+          const top = shape.y;
+          const right = shape.x + (shape.width || 0);
+          const bottom = shape.y + (shape.height || 0);
+          
+          return {
+            minX: Math.min(acc.minX, left),
+            minY: Math.min(acc.minY, top),
+            maxX: Math.max(acc.maxX, right),
+            maxY: Math.max(acc.maxY, bottom),
+          };
+        },
+        { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity }
+      );
+      
+      // Calculate center of clipboard shapes
+      const centerX = (bounds.minX + bounds.maxX) / 2;
+      const centerY = (bounds.minY + bounds.maxY) / 2;
+      
+      // Calculate offset to place center at cursor position
+      offsetX = cursorPosition.x - centerX;
+      offsetY = cursorPosition.y - centerY;
+    } else {
+      // No cursor position provided, use default offset (shouldn't happen with new behavior)
+      offsetX = 20;
+      offsetY = 20;
+    }
+    
+    state.clipboard.shapes.forEach(shape => {
+      const newId = crypto.randomUUID();
+      const now = Date.now();
+      const availableZIndex = findInsertionZIndex(shape.zIndex || 0, newShapes);
+      
+      const pastedShape: Shape = {
+        ...shape,
+        id: newId,
+        x: shape.x + offsetX,
+        y: shape.y + offsetY,
+        zIndex: availableZIndex,
+        updatedAt: now,
+        createdBy: state.currentUser?.uid || 'unknown',
+        updatedBy: state.currentUser?.uid || 'unknown',
+        clientTimestamp: now,
+      } as Shape;
+      
+      newShapes[newId] = pastedShape;
+      newSelectedIds.push(newId);
+    });
+    
+    set({
+      shapes: newShapes,
+      selectedIds: newSelectedIds,
+      selectedIdsSet: new Set(newSelectedIds),
+      shapeCount: Object.keys(newShapes).length,
+    });
+  },
+  
+  // Help modal actions
+  setShowHelpModal: (show: boolean) => set({ showHelpModal: show }),
+  
+  toggleHelpModal: () => set((state) => ({ showHelpModal: !state.showHelpModal })),
+  
+  // Viewport persistence actions
+  setViewportSaveDebounceTimer: (timer: NodeJS.Timeout | null) => {
+    const state = get();
+    if (state.viewportSaveDebounceTimer) {
+      clearTimeout(state.viewportSaveDebounceTimer);
+    }
+    set({ viewportSaveDebounceTimer: timer });
+  },
   
 }));
 

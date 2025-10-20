@@ -8,6 +8,7 @@ import ConnectionStatus from './components/UI/ConnectionStatus';
 import LayerPanel from './components/UI/LayerPanel';
 import PerformanceMonitor from './components/UI/PerformanceMonitor';
 import ChatPanel from './components/UI/ChatPanel';
+import HelpModal from './components/UI/HelpModal';
 import { useConnectionState } from '@/hooks/useConnectionState';
 import { useState, useEffect } from 'react';
 
@@ -82,6 +83,9 @@ function App() {
             onToggleVisibility={toggleChatVisibility}
           />
         </div>
+        
+        {/* Help Modal - Rendered globally */}
+        <HelpModal />
       </div>
     </AuthGuard>
   )
