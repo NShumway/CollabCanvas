@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import useCanvasStore from '@/store/canvasStore';
 import { createSyncEngine } from '@/services/syncEngine';
 import { calculateTextHeight } from '@/utils/textMeasurement';
+import { alignShapes, distributeShapes, getAlignmentAvailability } from '@/utils/alignment';
 import ColorPicker from './ColorPicker';
 
 const Toolbar = () => {
@@ -35,6 +36,9 @@ const Toolbar = () => {
     .map(id => shapes[id])
     .filter(shape => shape && shape.type === 'text');
   const hasSelectedText = selectedTextShapes.length > 0;
+  
+  // Check alignment/distribution availability
+  const alignmentAvailability = getAlignmentAvailability(selectedIds.length);
   
   const handleToolClick = (tool) => {
     if (createMode === tool) {
@@ -135,6 +139,49 @@ const Toolbar = () => {
   const handleStrikethroughToggle = () => {
     const currentStrikethrough = selectedTextShapes[0]?.strikethrough || false;
     updateTextProperty('strikethrough', !currentStrikethrough);
+  };
+
+  // Alignment and Distribution handlers
+  const handleAlignment = async (alignmentType) => {
+    if (selectedIds.length < 2 || !syncEngineRef.current) return;
+    
+    try {
+      const result = await alignShapes(
+        selectedIds,
+        alignmentType,
+        shapes,
+        syncEngineRef.current,
+        undefined, // No node refs for now - using fallback calculation
+        currentUser
+      );
+      
+      if (!result.success) {
+        console.warn('Alignment failed:', result.error);
+      }
+    } catch (error) {
+      console.error('Error during alignment:', error);
+    }
+  };
+
+  const handleDistribution = async (distributionType) => {
+    if (selectedIds.length < 3 || !syncEngineRef.current) return;
+    
+    try {
+      const result = await distributeShapes(
+        selectedIds,
+        distributionType,
+        shapes,
+        syncEngineRef.current,
+        undefined, // No node refs for now - using fallback calculation
+        currentUser
+      );
+      
+      if (!result.success) {
+        console.warn('Distribution failed:', result.error);
+      }
+    } catch (error) {
+      console.error('Error during distribution:', error);
+    }
   };
 
   // Get current properties from selected text shapes (use first shape as reference)
@@ -262,6 +309,115 @@ const Toolbar = () => {
               )}
             </button>
           </div>
+        )}
+        
+        {/* Alignment Tools */}
+        {alignmentAvailability.alignmentEnabled && (
+          <>
+            {/* Divider */}
+            <div className="w-px h-6 bg-gray-600" />
+            
+            <div className="flex items-center gap-1">
+              {/* Alignment buttons */}
+              <button
+                onClick={() => handleAlignment('left')}
+                className={toolButtonClass(false)}
+                title="Align Left"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M3 3h18v2H3V3zm0 4h12v2H3V7zm0 4h18v2H3v-2zm0 4h12v2H3v-2z"/>
+                  <path d="M2 2v20h1V2H2z"/>
+                </svg>
+              </button>
+              
+              <button
+                onClick={() => handleAlignment('center')}
+                className={toolButtonClass(false)}
+                title="Align Center"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M3 3h18v2H3V3zm4 4h10v2H7V7zm-4 4h18v2H3v-2zm4 4h10v2H7v-2z"/>
+                  <path d="M12 2v20h1V2h-1z"/>
+                </svg>
+              </button>
+              
+              <button
+                onClick={() => handleAlignment('right')}
+                className={toolButtonClass(false)}
+                title="Align Right"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M3 3h18v2H3V3zm6 4h12v2H9V7zm-6 4h18v2H3v-2zm6 4h12v2H9v-2z"/>
+                  <path d="M21 2v20h1V2h-1z"/>
+                </svg>
+              </button>
+              
+              <div className="w-px h-4 bg-gray-600 mx-1" />
+              
+              <button
+                onClick={() => handleAlignment('top')}
+                className={toolButtonClass(false)}
+                title="Align Top"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M3 3v1h18V3H3zm4 18v-6h2v6H7zm8 0v-6h2v6h-2zm-4 0v-8h2v8h-2z"/>
+                  <path d="M2 2h20v1H2V2z"/>
+                </svg>
+              </button>
+              
+              <button
+                onClick={() => handleAlignment('middle')}
+                className={toolButtonClass(false)}
+                title="Align Middle"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M7 5v6h2V5H7zm8 0v6h2V5h-2zm-4 0v8h2V5h-2zm-9 8v1h18v-1H2z"/>
+                  <path d="M2 12h20v1H2v-1z"/>
+                </svg>
+              </button>
+              
+              <button
+                onClick={() => handleAlignment('bottom')}
+                className={toolButtonClass(false)}
+                title="Align Bottom"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M7 3v6h2V3H7zm8 0v6h2V3h-2zm-4 0v8h2V3h-2z"/>
+                  <path d="M2 21h20v1H2v-1z"/>
+                </svg>
+              </button>
+            </div>
+          </>
+        )}
+        
+        {/* Distribution Tools */}
+        {alignmentAvailability.distributionEnabled && (
+          <>
+            {/* Small gap between alignment and distribution */}
+            <div className="flex items-center gap-1 ml-1">
+              <button
+                onClick={() => handleDistribution('horizontal')}
+                className={toolButtonClass(false)}
+                title="Distribute Horizontally"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M4 5v14h2V5H4zm14 0v14h2V5h-2zM9 8v8h6V8H9z"/>
+                  <path d="M8 10h1v4H8v-4zm7 0h1v4h-1v-4z"/>
+                </svg>
+              </button>
+              
+              <button
+                onClick={() => handleDistribution('vertical')}
+                className={toolButtonClass(false)}
+                title="Distribute Vertically"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M5 4h14v2H5V4zm0 14h14v2H5v-2zM8 9h8v6H8V9z"/>
+                  <path d="M10 8v1h4V8h-4zm0 7v1h4v-1h-4z"/>
+                </svg>
+              </button>
+            </div>
+          </>
         )}
         
         {/* Status and Hints / Text Formatting Controls */}

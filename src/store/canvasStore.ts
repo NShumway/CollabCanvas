@@ -173,8 +173,11 @@ const useCanvasStore = create<CanvasStore>((set, get) => ({
       selectedIdsSet: newSet
     });
     
-    // Update selection color based on new selection
-    get().updateSelectionColor();
+    // Only update color if this is the first selection or selection was empty
+    // For multi-select additions, keep current color for performance
+    if (state.selectedIds.length === 0) {
+      get().updateSelectionColor();
+    }
   },
   
   removeFromSelection: (id: string) => {
@@ -192,8 +195,8 @@ const useCanvasStore = create<CanvasStore>((set, get) => ({
       selectedIdsSet: newSet
     });
     
-    // Update selection color based on new selection
-    get().updateSelectionColor();
+    // Skip expensive color calculation for deselection - keep current color
+    // Color will update naturally on next selection
   },
   
   selectAll: () => {
@@ -437,6 +440,7 @@ const useCanvasStore = create<CanvasStore>((set, get) => ({
   setAspectLock: (aspectLock: boolean) => set({ aspectLock }),
 
   toggleAspectLock: () => set((state) => ({ aspectLock: !state.aspectLock })),
+
 
   // AI actions
   addChatMessage: (message: ChatMessage) => set((state) => ({

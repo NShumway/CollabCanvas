@@ -152,6 +152,14 @@ export type {
   RateLimitStatus
 } from './ai';
 
+// Alignment and distribution types
+export type {
+  AlignmentType,
+  DistributionType,
+  AlignmentResult,
+  ShapeNodeRef
+} from '../utils/alignment';
+
 // Utility types for common patterns
 export type Nullable<T> = T | null;
 export type Optional<T> = T | undefined;

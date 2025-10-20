@@ -14,6 +14,22 @@ import { devLog } from '@/utils/devSettings';
 import { createShape, calculateMaxZIndex } from '@/utils/shapeCreation';
 import { applyShapeUpdate, applyShapeScaling, applyRelativeMovement, describeShapeUpdates } from '@/utils/shapeUpdates';
 import { matchesText } from '@/utils/textMatching';
+import { alignShapes, distributeShapes, type AlignmentType, type DistributionType } from '@/utils/alignment';
+
+// AI Tool argument interfaces for better type safety
+interface AlignShapesArgs {
+  shapeIds: string[];
+  alignment: AlignmentType;
+}
+
+interface DistributeShapesArgs {
+  shapeIds: string[];
+  direction: DistributionType;
+}
+
+// Constants for validation
+const MIN_SHAPES_FOR_ALIGNMENT = 2;
+const MIN_SHAPES_FOR_DISTRIBUTION = 3;
 
 export class ToolRunner {
   private contextShapes: Record<string, any> = {};
@@ -104,6 +120,12 @@ export class ToolRunner {
         
         case 'getCanvasState':
           return await this.handleGetCanvasState(args);
+        
+        case 'alignShapes':
+          return await this.handleAlignShapes(args as AlignShapesArgs);
+        
+        case 'distributeShapes':
+          return await this.handleDistributeShapes(args as DistributeShapesArgs);
         
         default:
           return {
@@ -697,6 +719,132 @@ export class ToolRunner {
       return {
         success: false,
         message: 'Failed to get canvas state',
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Align shapes using existing alignment infrastructure
+   */
+  private async handleAlignShapes(args: AlignShapesArgs): Promise<ToolExecutionResult> {
+    const { shapeIds, alignment } = args;
+    
+    if (!Array.isArray(shapeIds) || shapeIds.length < MIN_SHAPES_FOR_ALIGNMENT) {
+      return {
+        success: false,
+        message: `At least ${MIN_SHAPES_FOR_ALIGNMENT} shape IDs are required for alignment`,
+        error: `shapeIds must be an array with at least ${MIN_SHAPES_FOR_ALIGNMENT} elements`
+      };
+    }
+
+    const validAlignments: AlignmentType[] = ['left', 'center', 'right', 'top', 'middle', 'bottom'];
+    if (!alignment || !validAlignments.includes(alignment)) {
+      return {
+        success: false,
+        message: `Invalid alignment type. Must be one of: ${validAlignments.join(', ')}`,
+        error: `Invalid alignment: ${alignment}`
+      };
+    }
+
+    try {
+      // Filter to only shapes that exist in viewport context (AI can only align visible shapes)
+      const existingIds = shapeIds.filter((id: string) => this.contextShapes[id]);
+      
+      if (existingIds.length < MIN_SHAPES_FOR_ALIGNMENT) {
+        return {
+          success: false,
+          message: `Only ${existingIds.length} of the specified shapes are visible. At least ${MIN_SHAPES_FOR_ALIGNMENT} shapes must be visible for alignment.`,
+          error: 'Insufficient visible shapes for alignment'
+        };
+      }
+
+      // Use existing alignment infrastructure
+      const result = await alignShapes(
+        existingIds,
+        alignment as AlignmentType,
+        this.contextShapes,
+        this.syncEngine,
+        undefined, // No node refs in AI context - using fallback calculation
+        this.currentUser || undefined
+      );
+
+      devLog.ai(`AI alignment (${alignment}):`, { 
+        requestedIds: shapeIds, 
+        alignedIds: result.updatedShapeIds,
+        success: result.success 
+      });
+
+      return result;
+
+    } catch (error: any) {
+      console.warn('Error in handleAlignShapes:', error);
+      return {
+        success: false,
+        message: 'Failed to align shapes',
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Distribute shapes using existing distribution infrastructure
+   */
+  private async handleDistributeShapes(args: DistributeShapesArgs): Promise<ToolExecutionResult> {
+    const { shapeIds, direction } = args;
+    
+    if (!Array.isArray(shapeIds) || shapeIds.length < MIN_SHAPES_FOR_DISTRIBUTION) {
+      return {
+        success: false,
+        message: `At least ${MIN_SHAPES_FOR_DISTRIBUTION} shape IDs are required for distribution`,
+        error: `shapeIds must be an array with at least ${MIN_SHAPES_FOR_DISTRIBUTION} elements`
+      };
+    }
+
+    const validDirections: DistributionType[] = ['horizontal', 'vertical'];
+    if (!direction || !validDirections.includes(direction)) {
+      return {
+        success: false,
+        message: `Invalid distribution direction. Must be 'horizontal' or 'vertical'`,
+        error: `Invalid direction: ${direction}`
+      };
+    }
+
+    try {
+      // Filter to only shapes that exist in viewport context (AI can only distribute visible shapes)
+      const existingIds = shapeIds.filter((id: string) => this.contextShapes[id]);
+      
+      if (existingIds.length < MIN_SHAPES_FOR_DISTRIBUTION) {
+        return {
+          success: false,
+          message: `Only ${existingIds.length} of the specified shapes are visible. At least ${MIN_SHAPES_FOR_DISTRIBUTION} shapes must be visible for distribution.`,
+          error: 'Insufficient visible shapes for distribution'
+        };
+      }
+
+      // Use existing distribution infrastructure
+      const result = await distributeShapes(
+        existingIds,
+        direction as DistributionType,
+        this.contextShapes,
+        this.syncEngine,
+        undefined, // No node refs in AI context - using fallback calculation
+        this.currentUser || undefined
+      );
+
+      devLog.ai(`AI distribution (${direction}):`, { 
+        requestedIds: shapeIds, 
+        distributedIds: result.updatedShapeIds,
+        success: result.success 
+      });
+
+      return result;
+
+    } catch (error: any) {
+      console.warn('Error in handleDistributeShapes:', error);
+      return {
+        success: false,
+        message: 'Failed to distribute shapes',
         error: error.message
       };
     }
