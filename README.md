@@ -16,13 +16,18 @@ Test with multiple browsers to see real-time collaboration in action!
 - **Shape Creation** - Rectangle creation tool with click-to-place interaction
 - **Multi-Select** - Drag-to-select rectangle or Shift+click to select multiple shapes
 - **Shape Management** - Delete, duplicate, and organize shapes with z-index layering
+- **Copy/Paste** - Clipboard support with offset positioning and relative layout preservation
 - **Layer Panel** - Visual layer management with drag reordering
+- **Canvas Export** - Export canvas as PNG, SVG, or JSON with metadata
 - **Real-time Shape Sync** - All shape operations sync across users in <100ms
 
 ### ✅ Interaction & Navigation
 - **Pan & Zoom** - Smooth 60 FPS navigation with mouse/trackpad
 - **Space + Drag Panning** - Figma-style panning with Space key
+- **Viewport Persistence** - Your zoom and pan position saves to Firestore and restores on reload
+- **Window Resize Handling** - Canvas adapts gracefully to window resizing, toolbars stay positioned
 - **Multi-shape Dragging** - Select and move multiple shapes together
+- **Arrow Key Nudging** - Fine-tune shape positions with arrow keys (10px) or Shift+Arrow (50px)
 - **Keyboard Shortcuts** - Full shortcut support (see reference below)
 - **Visual Feedback** - Selection rectangles, cursor states, and interaction hints
 
@@ -43,8 +48,14 @@ Test with multiple browsers to see real-time collaboration in action!
 | **Delete / Backspace** | Delete selected shapes |
 | **Ctrl + A** | Select all shapes |
 | **Ctrl + D** | Duplicate selected shapes |
+| **Ctrl + C** | Copy selected shapes to clipboard |
+| **Ctrl + V** | Paste shapes from clipboard |
 | **Ctrl + ]** | Bring selected shapes forward |
 | **Ctrl + [** | Send selected shapes backward |
+| **Arrow Keys** | Nudge selected shapes (10px) |
+| **Shift + Arrow** | Nudge selected shapes (50px) |
+| **Ctrl + K** | Open AI chat panel (when available) |
+| **Ctrl + ?** | Show keyboard shortcuts help |
 | **Escape** | Clear selection and exit create mode |
 
 ### 📱 Interaction Guide
@@ -63,6 +74,18 @@ Test with multiple browsers to see real-time collaboration in action!
 1. Use Layer Panel on right sidebar to see all shapes
 2. Drag shapes in panel to reorder layers
 3. Use Ctrl+] / Ctrl+[ shortcuts for quick layer changes
+
+**Copy/Paste & Duplication:**
+1. Select shapes you want to copy
+2. Press Ctrl+C to copy (or Ctrl+D to duplicate immediately)
+3. Press Ctrl+V to paste with automatic offset
+4. Relative positions are preserved for multi-shape copies
+
+**Canvas Export:**
+1. Click the Export button in toolbar
+2. Choose format: PNG (image), SVG (vector), or JSON (data)
+3. Select full canvas or current viewport only
+4. File downloads with metadata automatically
 
 ### ✅ Technical Architecture
 - **Bulletproof Sync Engine** - Prevents infinite loops, ghost objects, and race conditions
@@ -98,10 +121,12 @@ User Action → Local Update (60fps) → Queue Write → Firestore → Other Use
   selectedIds: [],
   viewport: { x, y, zoom },
   users: { [uid]: { name, cursorX, cursorY, color, online } },
+  clipboard: { shapes: [], timestamp: number }, // Copy/paste clipboard
   
   // Tier 2: Sync Tracking (prevents echo loops)
   pendingWrites: { [shapeId]: timestamp },
   currentUser: { uid, displayName, color },
+  viewportSaveDebounceTimer: NodeJS.Timeout | null, // Viewport persistence debouncing
   
   // Tier 3: Connection State (network monitoring)
   connectionState: 'connected' | 'disconnected' | 'reconnecting',
@@ -162,11 +187,48 @@ User Action → Local Update (60fps) → Queue Write → Firestore → Other Use
 
 ### Build and Deploy
 
+**Option 1: Firebase Hosting (Recommended)**
+
 ```bash
+# Build production bundle
 npm run build
-firebase deploy
-# or deploy to Vercel/Netlify
+
+# Deploy to Firebase (requires Firebase CLI)
+# Install if needed: npm install -g firebase-tools
+firebase login
+firebase deploy --only hosting
+
+# Your app will be live at: https://[your-project-id].web.app
 ```
+
+**Option 2: Vercel**
+
+```bash
+# Install Vercel CLI
+npm install -g vercel
+
+# Build and deploy
+npm run build
+vercel --prod
+```
+
+**Option 3: Netlify**
+
+```bash
+# Build
+npm run build
+
+# Deploy via Netlify CLI or drag-and-drop dist/ folder to Netlify dashboard
+npm install -g netlify-cli
+netlify deploy --prod --dir=dist
+```
+
+**Important Deployment Notes:**
+- Ensure all environment variables are set in your hosting platform
+- For Firebase: Set environment variables in Firebase Console → Hosting
+- For Vercel/Netlify: Set environment variables in project settings
+- HTTPS is required for clipboard API functionality (navigator.clipboard)
+- Test multiplayer functionality after deployment with multiple devices
 
 ## 🎯 Performance Targets (All Met)
 
@@ -207,6 +269,70 @@ firebase deploy
 2. Look for echo prevention messages: `🔄 Skipping echo (hasPendingWrites)`
 3. Verify no infinite loops or excessive re-renders
 4. Check Network tab for reasonable Firestore usage
+
+## 🔄 Conflict Resolution Strategy
+
+CollabCanvas uses a **"Last Write Wins"** approach with server timestamps for conflict resolution. This simple, proven strategy ensures consistent state across all clients without complex operational transform algorithms.
+
+### How It Works
+
+1. **Server Timestamps as Authority**
+   - Every write to Firestore includes `updatedAt: serverTimestamp()`
+   - Server timestamps are the single source of truth for ordering
+   - Clients defer to server time, never use local timestamps for resolution
+
+2. **Optimistic Local Updates**
+   - User actions update local Zustand store immediately (60 FPS UI responsiveness)
+   - Changes are queued and written to Firestore with debouncing (~100ms batches)
+   - Other clients receive updates via Firestore listeners
+
+3. **Conflict Scenarios**
+   
+   **Scenario A: Two users edit the same shape simultaneously**
+   - Both users see instant local feedback
+   - Both writes reach Firestore with server timestamps
+   - The last write to reach the server wins
+   - All clients converge to the winning state via listeners
+   
+   **Scenario B: Network partition / offline editing**
+   - User continues editing locally (optimistic updates)
+   - When reconnected, local changes sync to Firestore
+   - If another user edited the same shape, server timestamp determines winner
+   - User may see their changes temporarily overwritten (expected behavior)
+
+4. **Echo Prevention**
+   - When a client writes to Firestore, it marks the write in `pendingWrites`
+   - When the listener fires, it checks: "Did I just write this?"
+   - If yes, skip the update (already applied locally)
+   - If no, apply the remote update
+
+5. **Why This Approach?**
+   - ✅ Simple to implement and reason about
+   - ✅ No complex operational transform or CRDT logic
+   - ✅ Works reliably with Firestore's built-in timestamps
+   - ✅ Proven pattern used by major collaborative tools
+   - ✅ Users understand "last edit wins" intuitively
+   - ⚠️ Trade-off: User edits may be overwritten in rare simultaneous edit cases
+
+### Handling Specific Operations
+
+- **Shape Creation:** ID generated client-side (UUID), conflicts impossible
+- **Shape Movement/Resize:** Last position/size wins based on server timestamp
+- **Shape Deletion:** Deletion timestamp compared to update timestamp
+- **Multi-Select Operations:** Each shape treated independently for conflicts
+- **Cursor Movement:** High-frequency updates, intentionally overwrite (no conflict handling needed)
+- **User Presence:** Simple online/offline toggle, last status wins
+
+### Future Enhancements (Not Implemented)
+
+For production applications requiring stronger conflict handling:
+- User notifications when edits are overwritten
+- Visual indicators during simultaneous editing
+- Shape locking mechanism (first to select gets edit rights)
+- Operational transform for text editing
+- Version history and manual conflict resolution UI
+
+**Current Status:** Simple "last write wins" is sufficient for the target use case (small teams, <10 concurrent users, low conflict probability).
 
 ## 🚨 Critical Architecture Rules
 
@@ -270,7 +396,8 @@ canvases/{canvasId}/
 │   ├── cursorX, cursorY: number
 │   ├── color: string
 │   ├── online: boolean
-│   └── lastSeen: ServerTimestamp
+│   ├── lastSeen: ServerTimestamp
+│   └── viewport: { x, y, zoom, updatedAt } # Per-user viewport persistence
 └── metadata              # Canvas metadata
     ├── createdAt: ServerTimestamp
     └── createdBy: string
@@ -282,12 +409,17 @@ canvases/{canvasId}/
 - ✅ **Multi-select and layer management** - Drag-to-select, z-index controls, Layer Panel
 - ✅ **Delete and duplicate operations** - Full keyboard shortcut support
 - ✅ **Enhanced interaction** - Space+drag panning, multi-shape operations
+- ✅ **Copy/Paste system** - Clipboard support with relative positioning
+- ✅ **Canvas Export** - Export to PNG, SVG, or JSON formats
+- ✅ **Window Resize Handling** - Graceful canvas adaptation to window changes
+- ✅ **Viewport Persistence** - Per-user zoom/pan saved to Firestore
+- ✅ **Arrow Key Nudging** - Fine-grained shape positioning control
+- ✅ **Keyboard Shortcuts Help** - Comprehensive shortcut reference (Ctrl+?)
 
 ### 🚧 Phase 2: Additional Shapes (Next)
 - Ellipse and text shape types
 - Resize and rotation handles  
 - Color picker and styling options
-- Copy/paste operations
 
 ### 🔮 Phase 3: AI Agent (Future)
 - Natural language shape creation ("Create a red ellipse")
@@ -298,9 +430,10 @@ canvases/{canvasId}/
 ## ⚠️ Current Limitations
 
 ### Shape Types & Editing:
-- **Single shape type:** Only rectangles (ellipse, text coming in next release)
-- **No resize/rotation:** Shapes are fixed size after creation
+- **Limited shape types:** Only rectangles (ellipse, text coming in next release)
+- **No resize/rotation:** Shapes are fixed size after creation (transform system in development)
 - **No color editing:** Default colors only (color picker in development)
+- **No copy/paste between browsers:** Clipboard is per-browser session only
 
 ### Canvas & Access:
 - **Single canvas:** All users share one canvas (`default-canvas`)
@@ -310,8 +443,6 @@ canvases/{canvasId}/
 ### UI/UX Issues:
 - **Minimal interface:** Very basic toolbar and UI styling
 - **Username scaling:** User labels zoom with canvas content instead of staying readable
-- **Viewport persistence:** Pan and zoom position reset on browser refresh
-- **Window resize handling:** Canvas doesn't adapt to new window dimensions properly
 - **Update dependencies:** Some UI components (like active users list) only refresh during mouse movement
 
 ### Technical Limitations:

@@ -337,8 +337,8 @@ The following PRs have been completed successfully:
 
 ---
 
-## PR #16 — Copy/Paste & Keyboard Shortcuts
-**Goal:** Implement internal clipboard and comprehensive keyboard shortcuts.
+## PR #16 — Small UX Improvements & Power Features
+**Goal:** Implement copy/paste, canvas export, window resize handling, viewport persistence, and keyboard shortcuts.
 
 ### Tasks
 1. **Clipboard system** (**CONSIDER NATIVE CLIPBOARD API**)
@@ -347,22 +347,40 @@ The following PRs have been completed successfully:
    - Copy selected shapes to clipboard (JSON serialization).
    - Paste with offset positioning.
    - Preserve relative positions in multi-shape copies.
-2. **Keyboard shortcuts**
+2. **Canvas export feature**
+   - Export canvas as PNG/SVG/JSON.
+   - Download button in toolbar.
+   - Option to export full canvas or current viewport only.
+   - Include metadata (timestamp, user count, shape count).
+3. **Window resize handling**
+   - Listen to window resize events gracefully.
+   - Canvas top-left position stays the same (preserve coordinate system).
+   - Show more/less canvas space based on available viewport.
+   - Reposition toolbars to stay at left/top and right edge.
+   - Maintain aspect ratio and prevent canvas drift.
+4. **Viewport persistence** (**NEW FIREBASE FEATURE**)
+   - Save user's last zoom and pan position to Firestore.
+   - Store in `users/{userId}/viewport` with `{ x, y, zoom, updatedAt }`.
+   - Load saved viewport on canvas mount/refresh.
+   - Debounce viewport saves (only after pan/zoom stops for 500ms).
+   - Per-user viewport (each user maintains their own view).
+5. **Keyboard shortcuts**
    - Copy (Ctrl+C), Paste (Ctrl+V).
    - Select All (Ctrl+A), Delete key.
    - Duplicate (Ctrl+D), Undo prevention message.
-   - Arrow keys for nudging selected shapes.
+   - Arrow keys for nudging selected shapes (10px per press, 50px with Shift).
    - Escape to clear selection.
-3. **Help overlay**
+6. **Help overlay**
    - Keyboard shortcut help (Ctrl+?).
-   - Modal overlay with shortcut list.
-4. **Unit Tests**: Clipboard operations, keyboard event handling
-5. **Code Cleanup Sweep #3 (Post-AI)**:
+   - Modal overlay with comprehensive shortcut list.
+   - Include new export and navigation shortcuts.
+7. **Unit Tests**: Clipboard operations, keyboard event handling, viewport persistence
+8. **Code Cleanup Sweep #3 (Post-AI)**:
    - Audit all components for unused props/state
    - Remove temporary debugging code and console.logs
    - Clean up store actions - consolidate similar functions
    - Review file structure - move misplaced files to correct directories
-6. Acceptance: Copy/paste maintains relative layouts; all shortcuts work consistently.
+9. Acceptance: Copy/paste maintains relative layouts; export works correctly; window resize is smooth; viewport persists across sessions; all shortcuts work consistently.
 
 ---
 

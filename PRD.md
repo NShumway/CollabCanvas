@@ -187,12 +187,30 @@ getCanvasState, getSelectedShapes
 - Copy/Paste (Ctrl+C/V)  
 - Select All (Ctrl+A)  
 - Z-index (Ctrl+], Ctrl+[)  
-- Move (Arrow keys), Escape (deselect)  
-- Help overlay (Ctrl+/)
+- Move (Arrow keys - 10px, Shift+Arrow - 50px), Escape (deselect)  
+- Help overlay (Ctrl+?)
 
 **Copy/Paste**
 - Per-user clipboard  
 - Multi-copy/paste preserving relative positions  
+
+**Canvas Export**
+- Export as PNG, SVG, or JSON format
+- Export full canvas or current viewport
+- Include metadata (timestamp, shape count, user count)
+- Download button in toolbar
+
+**Window Resize Handling**
+- Graceful resize with preserved coordinate system
+- Canvas top-left stays anchored
+- Dynamic viewport adjustment (show more/less space)
+- Toolbars stay positioned at edges (left, top, right)
+
+**Viewport Persistence**
+- Per-user zoom and pan positions saved to Firestore
+- Auto-restore viewport on reload/refresh
+- Debounced saves (500ms after pan/zoom stops)
+- Each user maintains their own view independently
 
 **Alignment Tools**
 - Align left/center/right, top/middle/bottom  
@@ -266,6 +284,8 @@ getCanvasState, getSelectedShapes
   clipboard: { shapes: [], timestamp: number },
   transforming: { shapeId, mode: 'resize' | 'rotate' | null },
   editingTextId: null,
+  
+  viewportSaveDebounceTimer: NodeJS.Timeout | null, // For viewport persistence
 
   aiCommands: { [id]: { status, userId, message, timestamp } },
   chatMessages: [{ role, content, timestamp }],
@@ -302,6 +322,7 @@ All shapes use consistent `x, y, width, height` properties:
 
   users/{userId}
     uid, displayName, cursorX, cursorY, color, online, lastSeen
+    viewport: { x, y, zoom, updatedAt } (per-user viewport persistence)
 
   comments/{commentId}
     text, author, x, y
